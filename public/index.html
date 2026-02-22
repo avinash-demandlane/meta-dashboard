@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meta Ads Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .tab-active { background: #3b82f6; color: #fff; }
+    .tab-inactive { background: #1e293b; color: #94a3b8; }
+    .tab-inactive:hover { background: #334155; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-white">Meta Ads Dashboard</h1>
+        <p id="accountName" class="text-sm text-slate-400">Loading...</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <input type="date" id="dateFrom" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+        <span class="text-slate-500 text-sm">to</span>
+        <input type="date" id="dateTo" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+        <button onclick="loadAll()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- KPI Cards -->
+    <section id="kpiSection">
+      <div id="kpiGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- Daily Chart -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-4">Daily Performance</h2>
+      <div class="relative" style="height: 320px;">
+        <div id="chartLoading" class="absolute inset-0 flex items-center justify-center"><div class="spinner"></div></div>
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Breakdown Tabs -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-4">Breakdowns</h2>
+      <div class="flex gap-2 mb-4 flex-wrap">
+        <button onclick="loadBreakdown('age')" data-tab="age" class="tab-active px-4 py-1.5 rounded-lg text-sm font-medium transition">Age</button>
+        <button onclick="loadBreakdown('gender')" data-tab="gender" class="tab-inactive px-4 py-1.5 rounded-lg text-sm font-medium transition">Gender</button>
+        <button onclick="loadBreakdown('placement')" data-tab="placement" class="tab-inactive px-4 py-1.5 rounded-lg text-sm font-medium transition">Placement</button>
+        <button onclick="loadBreakdown('device')" data-tab="device" class="tab-inactive px-4 py-1.5 rounded-lg text-sm font-medium transition">Device</button>
+      </div>
+      <div id="breakdownLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
+      <div class="overflow-x-auto">
+        <table id="breakdownTable" class="w-full text-sm">
+          <thead id="breakdownHead" class="text-slate-400 border-b border-slate-800">
+          </thead>
+          <tbody id="breakdownBody" class="divide-y divide-slate-800/50">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Campaigns Table -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-4">Campaigns</h2>
+      <div id="campaignsLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
+      <div class="overflow-x-auto">
+        <table id="campaignsTable" class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-2 px-3 font-medium">Campaign</th>
+              <th class="text-left py-2 px-3 font-medium">Status</th>
+              <th class="text-right py-2 px-3 font-medium">Spend</th>
+              <th class="text-right py-2 px-3 font-medium">Impressions</th>
+              <th class="text-right py-2 px-3 font-medium">Clicks</th>
+              <th class="text-right py-2 px-3 font-medium">CTR</th>
+              <th class="text-right py-2 px-3 font-medium">CPC</th>
+              <th class="text-right py-2 px-3 font-medium">Leads</th>
+            </tr>
+          </thead>
+          <tbody id="campaignsBody" class="divide-y divide-slate-800/50">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="text-center py-6 text-xs text-slate-600">
+    Meta Ads Dashboard &middot; Data from Meta Marketing API v21.0
+  </footer>
+
+<script>
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function fmt(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + 'Cr';
+  if (n >= 1e5) return '₹' + (n / 1e5).toFixed(2) + 'L';
+  if (n >= 1e3) return '₹' + (n / 1e3).toFixed(1) + 'K';
+  return '₹' + n.toFixed(2);
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1e7) return (n / 1e7).toFixed(2) + 'Cr';
+  if (n >= 1e5) return (n / 1e5).toFixed(2) + 'L';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toLocaleString('en-IN');
+}
+
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '—';
+  return n.toFixed(2) + '%';
+}
+
+function getLeads(row) {
+  return row.actions?.lead || row.actions?.onsite_web_lead || 0;
+}
+
+function getCPL(row) {
+  return row.cost_per_action?.lead || row.cost_per_action?.onsite_web_lead || 0;
+}
+
+function getDates() {
+  return {
+    from: document.getElementById('dateFrom').value,
+    to: document.getElementById('dateTo').value,
+  };
+}
+
+function qs(d) {
+  const p = new URLSearchParams();
+  if (d.from) p.set('date_from', d.from);
+  if (d.to) p.set('date_to', d.to);
+  return p.toString() ? '?' + p.toString() : '';
+}
+
+async function api(path) {
+  const res = await fetch(path);
+  const json = await res.json();
+  if (!json.success && json.error) throw new Error(json.error);
+  return json;
+}
+
+// ─── Default dates (last 30 days) ───────────────────────────────────────────
+
+function setDefaultDates() {
+  const today = new Date();
+  const from = new Date(today.getTime() - 30 * 86400000);
+  document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+  document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
+}
+
+// ─── KPI Cards ──────────────────────────────────────────────────────────────
+
+function renderKPI(data) {
+  const row = data[0] || {};
+  const leads = getLeads(row);
+  const cpl = getCPL(row);
+
+  const cards = [
+    { label: 'Spend', value: fmt(row.spend), color: 'blue' },
+    { label: 'Impressions', value: fmtNum(row.impressions), color: 'purple' },
+    { label: 'Clicks', value: fmtNum(row.clicks), color: 'cyan' },
+    { label: 'CTR', value: fmtPct(row.ctr), color: 'green' },
+    { label: 'CPC', value: fmt(row.cpc), color: 'amber' },
+    { label: 'CPM', value: fmt(row.cpm), color: 'orange' },
+    { label: 'Leads', value: fmtNum(leads), color: 'emerald' },
+    { label: 'Cost/Lead', value: fmt(cpl), color: 'rose' },
+  ];
+
+  const colorMap = {
+    blue: 'border-blue-500/30 bg-blue-500/5',
+    purple: 'border-purple-500/30 bg-purple-500/5',
+    cyan: 'border-cyan-500/30 bg-cyan-500/5',
+    green: 'border-green-500/30 bg-green-500/5',
+    amber: 'border-amber-500/30 bg-amber-500/5',
+    orange: 'border-orange-500/30 bg-orange-500/5',
+    emerald: 'border-emerald-500/30 bg-emerald-500/5',
+    rose: 'border-rose-500/30 bg-rose-500/5',
+  };
+
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = cards.map(c => `
+    <div class="border rounded-xl p-3 sm:p-4 ${colorMap[c.color]}">
+      <p class="text-xs text-slate-400 font-medium mb-1">${c.label}</p>
+      <p class="text-lg sm:text-xl font-bold text-white">${c.value}</p>
+    </div>
+  `).join('');
+}
+
+// ─── Daily Chart ────────────────────────────────────────────────────────────
+
+let dailyChart = null;
+
+function renderDailyChart(data) {
+  document.getElementById('chartLoading').classList.add('hidden');
+
+  const labels = data.map(d => {
+    const dt = new Date(d.date_start);
+    return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  });
+  const spendData = data.map(d => d.spend);
+  const clicksData = data.map(d => d.clicks);
+
+  if (dailyChart) dailyChart.destroy();
+
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+  dailyChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Spend (₹)',
+          data: spendData,
+          backgroundColor: 'rgba(59, 130, 246, 0.3)',
+          borderColor: 'rgba(59, 130, 246, 0.8)',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y',
+          order: 2,
+        },
+        {
+          label: 'Clicks',
+          data: clicksData,
+          borderColor: 'rgba(6, 182, 212, 0.9)',
+          backgroundColor: 'rgba(6, 182, 212, 0.1)',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          type: 'line',
+          yAxisID: 'y1',
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#f1f5f9',
+          bodyColor: '#cbd5e1',
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.yAxisID === 'y') return 'Spend: ₹' + ctx.parsed.y.toLocaleString('en-IN');
+              return 'Clicks: ' + ctx.parsed.y.toLocaleString('en-IN');
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 45 },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y: {
+          position: 'left',
+          ticks: {
+            color: '#60a5fa',
+            font: { size: 11 },
+            callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(0) + 'K' : v),
+          },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y1: {
+          position: 'right',
+          ticks: { color: '#22d3ee', font: { size: 11 } },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+}
+
+// ─── Breakdown Tables ───────────────────────────────────────────────────────
+
+let currentTab = 'age';
+
+function loadBreakdown(type) {
+  currentTab = type;
+
+  // Update tab styles
+  document.querySelectorAll('[data-tab]').forEach(btn => {
+    btn.className = btn.dataset.tab === type
+      ? 'tab-active px-4 py-1.5 rounded-lg text-sm font-medium transition'
+      : 'tab-inactive px-4 py-1.5 rounded-lg text-sm font-medium transition';
+  });
+
+  const d = getDates();
+  const params = new URLSearchParams();
+  if (d.from) params.set('date_from', d.from);
+  if (d.to) params.set('date_to', d.to);
+  params.set('breakdown', type);
+
+  document.getElementById('breakdownLoading').classList.remove('hidden');
+  document.getElementById('breakdownBody').innerHTML = '';
+
+  api('/api/ads/insights?' + params.toString())
+    .then(json => renderBreakdown(json.data, type))
+    .catch(err => {
+      document.getElementById('breakdownBody').innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-400">${err.message}</td></tr>`;
+    })
+    .finally(() => document.getElementById('breakdownLoading').classList.add('hidden'));
+}
+
+function getSegmentKey(type) {
+  const map = { age: 'age', gender: 'gender', placement: 'platform', device: 'device' };
+  return map[type] || type;
+}
+
+function renderBreakdown(data, type) {
+  const segKey = getSegmentKey(type);
+
+  document.getElementById('breakdownHead').innerHTML = `
+    <tr>
+      <th class="text-left py-2 px-3 font-medium">${type.charAt(0).toUpperCase() + type.slice(1)}</th>
+      <th class="text-right py-2 px-3 font-medium">Spend</th>
+      <th class="text-right py-2 px-3 font-medium">Impressions</th>
+      <th class="text-right py-2 px-3 font-medium">Clicks</th>
+      <th class="text-right py-2 px-3 font-medium">CTR</th>
+      <th class="text-right py-2 px-3 font-medium">CPC</th>
+      <th class="text-right py-2 px-3 font-medium">Leads</th>
+    </tr>
+  `;
+
+  document.getElementById('breakdownBody').innerHTML = data.map(row => `
+    <tr class="hover:bg-slate-800/50">
+      <td class="py-2 px-3 text-white font-medium">${row[segKey] || '—'}</td>
+      <td class="py-2 px-3 text-right">${fmt(row.spend)}</td>
+      <td class="py-2 px-3 text-right">${fmtNum(row.impressions)}</td>
+      <td class="py-2 px-3 text-right">${fmtNum(row.clicks)}</td>
+      <td class="py-2 px-3 text-right">${fmtPct(row.ctr)}</td>
+      <td class="py-2 px-3 text-right">${fmt(row.cpc)}</td>
+      <td class="py-2 px-3 text-right">${fmtNum(getLeads(row))}</td>
+    </tr>
+  `).join('');
+}
+
+// ─── Campaigns Table ────────────────────────────────────────────────────────
+
+function renderCampaigns(campaigns) {
+  const statusBadge = (s) => {
+    const colors = {
+      ACTIVE: 'bg-green-500/20 text-green-400',
+      PAUSED: 'bg-amber-500/20 text-amber-400',
+      DELETED: 'bg-red-500/20 text-red-400',
+      ARCHIVED: 'bg-slate-500/20 text-slate-400',
+    };
+    const cls = colors[s] || 'bg-slate-500/20 text-slate-400';
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${s}</span>`;
+  };
+
+  document.getElementById('campaignsBody').innerHTML = campaigns.map(c => {
+    const ins = c.insights?.data?.[0] || {};
+    const actions = {};
+    (ins.actions || []).forEach(a => { actions[a.action_type] = Number(a.value); });
+    const costPer = {};
+    (ins.cost_per_action_type || []).forEach(a => { costPer[a.action_type] = Number(a.value); });
+    const leads = actions.lead || actions.onsite_web_lead || 0;
+
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="py-2 px-3 text-white font-medium max-w-xs truncate">${c.name}</td>
+        <td class="py-2 px-3">${statusBadge(c.status)}</td>
+        <td class="py-2 px-3 text-right">${fmt(Number(ins.spend || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(Number(ins.impressions || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(Number(ins.clicks || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtPct(Number(ins.ctr || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmt(Number(ins.cpc || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(leads)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ─── Load All ───────────────────────────────────────────────────────────────
+
+async function loadAll() {
+  const d = getDates();
+  const q = qs(d);
+
+  // Show loading states
+  document.getElementById('kpiGrid').innerHTML = '<div class="col-span-full flex justify-center py-8"><div class="spinner"></div></div>';
+  document.getElementById('chartLoading').classList.remove('hidden');
+  document.getElementById('campaignsLoading').classList.remove('hidden');
+
+  try {
+    const [accountRes, insightsRes, dailyRes, campaignsRes] = await Promise.all([
+      api('/api/ads/account'),
+      api('/api/ads/insights' + q),
+      api('/api/ads/insights/daily' + q),
+      api('/api/ads/campaigns' + q),
+    ]);
+
+    // Account name
+    document.getElementById('accountName').textContent = accountRes.data.name + ' (' + accountRes.data.currency + ')';
+
+    // KPI
+    renderKPI(insightsRes.data);
+
+    // Chart
+    renderDailyChart(dailyRes.data);
+
+    // Campaigns
+    document.getElementById('campaignsLoading').classList.add('hidden');
+    renderCampaigns(campaignsRes.data);
+
+    // Load default breakdown
+    loadBreakdown(currentTab);
+
+  } catch (err) {
+    document.getElementById('kpiGrid').innerHTML = `<div class="col-span-full text-center py-8 text-red-400">${err.message}</div>`;
+    document.getElementById('chartLoading').innerHTML = `<p class="text-red-400">${err.message}</p>`;
+    document.getElementById('campaignsLoading').classList.add('hidden');
+  }
+}
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+
+setDefaultDates();
+loadAll();
+</script>
+</body>
+</html>

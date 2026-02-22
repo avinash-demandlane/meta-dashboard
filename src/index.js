@@ -16,12 +16,13 @@ if (missing.length) {
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
 // Routes
 app.use("/api/ads", adsRouter);
 
-// Health check
-app.get("/", (_req, res) => {
+// Health check (fallback if no index.html)
+app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     endpoints: [
