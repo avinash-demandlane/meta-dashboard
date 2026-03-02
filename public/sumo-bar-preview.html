@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sumo Bar Options — Mobile-First</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #e2e8f0;
+      color: #334155;
+      padding: 32px 20px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 32px;
+    }
+    .preview-label {
+      max-width: 420px;
+      margin: 40px auto 10px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+    }
+    .preview-label:first-of-type { margin-top: 0; }
+    .preview-desc {
+      max-width: 420px;
+      margin: 0 auto 14px;
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+
+    /* Phone frame */
+    .phone-frame {
+      width: 375px;
+      margin: 0 auto;
+      background: #000;
+      border-radius: 20px;
+      padding: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+    .phone-screen {
+      background: #f8fafc;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+    }
+    /* Fake status bar */
+    .status-bar {
+      background: #f8fafc;
+      padding: 6px 20px 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .status-icons { display: flex; gap: 4px; align-items: center; }
+    .status-icons svg { width: 14px; height: 14px; }
+
+    /* Fake LP content below bar */
+    .fake-lp {
+      padding: 20px 16px 24px;
+      text-align: center;
+    }
+    .fake-lp .lp-heading {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.3;
+      margin-bottom: 10px;
+    }
+    .fake-lp .lp-sub {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .fake-lp .lp-btn {
+      display: inline-block;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 32px;
+      border-radius: 8px;
+    }
+
+    /* ── Sumo Bar: Mobile-first ── */
+    .sumo-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 38px 7px 10px;
+      font-size: 12px;
+      line-height: 1.35;
+      position: relative;
+    }
+    .sumo-bar strong { font-weight: 700; }
+    .sumo-bar .close-btn {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      border-left: 1px solid rgba(255,255,255,0.1);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+      padding: 0;
+    }
+    .sumo-bar .close-btn:hover { opacity: 1; }
+    .sumo-bar .bar-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .pulse-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      animation: pulse 1.8s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── Color themes ── */
+    .bar-a {
+      background: linear-gradient(135deg, #1e3a5f, #1a365d);
+      color: #cbd5e1;
+    }
+    .bar-a .close-btn { color: #64748b; border-left-color: rgba(255,255,255,0.08); }
+    .bar-a strong { color: #f1f5f9; }
+    .bar-a .bar-badge { background: rgba(245,158,11,0.2); color: #fbbf24; }
+    .bar-a .pulse-dot { background: #fbbf24; }
+
+    .bar-b {
+      background: linear-gradient(135deg, #064e3b, #065f46);
+      color: #a7f3d0;
+    }
+    .bar-b .close-btn { color: #34d399; border-left-color: rgba(255,255,255,0.08); }
+    .bar-b strong { color: #ecfdf5; }
+    .bar-b .bar-badge { background: rgba(255,255,255,0.12); color: #6ee7b7; }
+    .bar-b .pulse-dot { background: #34d399; }
+
+    .bar-c {
+      background: linear-gradient(135deg, #78350f, #92400e);
+      color: #fde68a;
+    }
+    .bar-c .close-btn { color: #d97706; border-left-color: rgba(255,255,255,0.08); }
+    .bar-c strong { color: #fffbeb; }
+    .bar-c .bar-badge { background: rgba(255,255,255,0.12); color: #fde68a; }
+    .bar-c .pulse-dot { background: #fbbf24; }
+
+    .bar-d {
+      background: #ffffff;
+      color: #475569;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .bar-d .close-btn { color: #94a3b8; border-left-color: #e2e8f0; }
+    .bar-d strong { color: #0f172a; }
+    .bar-d .bar-badge { background: #dcfce7; color: #16a34a; }
+    .bar-d .pulse-dot { background: #22c55e; }
+
+    .bar-e {
+      background: linear-gradient(135deg, #7f1d1d, #991b1b);
+      color: #fecaca;
+    }
+    .bar-e .close-btn { color: #ef4444; border-left-color: rgba(255,255,255,0.08); }
+    .bar-e strong { color: #fff1f2; }
+    .bar-e .bar-badge { background: rgba(255,255,255,0.12); color: #fca5a5; }
+    .bar-e .pulse-dot { background: #f87171; }
+  </style>
+</head>
+<body>
+
+<h1>Sumo Bar — Mobile Preview</h1>
+<p class="subtitle">Previewed at 375px (iPhone) &middot; 95% mobile traffic</p>
+
+<!-- ── OPTION A ── -->
+<p class="preview-label">Option A — Scarcity (Recommended)</p>
+<p class="preview-desc">Short, punchy. "March spots" creates urgency, $4,018 reinforces the ad.</p>
+<div class="phone-frame">
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M1 12h2v3H1zM5 9h2v6H5zM9 6h2v9H9zM13 3h2v12h-2z"/></svg>
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M2 5h12v7H2z"/><path d="M14.5 7v3h1V7z"/></svg>
+      </span>
+    </div>
+    <div class="sumo-bar bar-a">
+      <span class="bar-badge"><span class="pulse-dot"></span> LIVE</span>
+      <span><strong>March spots filling fast</strong> — Up to <strong>$4,018/mo</strong> in benefits</span>
+      <button class="close-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="fake-lp">
+      <p class="lp-heading">Are You 40 Years or Older?</p>
+      <p class="lp-sub">Answer 3 quick questions to check your disability benefit eligibility</p>
+      <span class="lp-btn">See What I Am Eligible For</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── OPTION B ── -->
+<p class="preview-label">Option B — Speed / Ease</p>
+<p class="preview-desc">"60 seconds" lowers commitment anxiety. Good for reducing bounce.</p>
+<div class="phone-frame">
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M1 12h2v3H1zM5 9h2v6H5zM9 6h2v9H9zM13 3h2v12h-2z"/></svg>
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M2 5h12v7H2z"/><path d="M14.5 7v3h1V7z"/></svg>
+      </span>
+    </div>
+    <div class="sumo-bar bar-b">
+      <span class="bar-badge"><span class="pulse-dot"></span> FREE</span>
+      <span><strong>60-second check</strong> — See if you qualify for <strong>$4,018/mo</strong></span>
+      <button class="close-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="fake-lp">
+      <p class="lp-heading">Are You 40 Years or Older?</p>
+      <p class="lp-sub">Answer 3 quick questions to check your disability benefit eligibility</p>
+      <span class="lp-btn">See What I Am Eligible For</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── OPTION C ── -->
+<p class="preview-label">Option C — Social Proof</p>
+<p class="preview-desc">Real-time number builds trust. Older audiences respond well to "others are doing it."</p>
+<div class="phone-frame">
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M1 12h2v3H1zM5 9h2v6H5zM9 6h2v9H9zM13 3h2v12h-2z"/></svg>
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M2 5h12v7H2z"/><path d="M14.5 7v3h1V7z"/></svg>
+      </span>
+    </div>
+    <div class="sumo-bar bar-c">
+      <span class="bar-badge"><span class="pulse-dot"></span> NOW</span>
+      <span><strong>847 people</strong> checked eligibility today — up to <strong>$4,018/mo</strong></span>
+      <button class="close-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="fake-lp">
+      <p class="lp-heading">Are You 40 Years or Older?</p>
+      <p class="lp-sub">Answer 3 quick questions to check your disability benefit eligibility</p>
+      <span class="lp-btn">See What I Am Eligible For</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── OPTION D ── -->
+<p class="preview-label">Option D — Live Rep</p>
+<p class="preview-desc">Matches your LP's "Danielle is live" messaging. Personal touch for older demo.</p>
+<div class="phone-frame">
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M1 12h2v3H1zM5 9h2v6H5zM9 6h2v9H9zM13 3h2v12h-2z"/></svg>
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M2 5h12v7H2z"/><path d="M14.5 7v3h1V7z"/></svg>
+      </span>
+    </div>
+    <div class="sumo-bar bar-d">
+      <span class="bar-badge"><span class="pulse-dot"></span> LIVE</span>
+      <span><strong>Reps available now</strong> — No wait. 3 questions to check eligibility.</span>
+      <button class="close-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="fake-lp">
+      <p class="lp-heading">Are You 40 Years or Older?</p>
+      <p class="lp-sub">Answer 3 quick questions to check your disability benefit eligibility</p>
+      <span class="lp-btn">See What I Am Eligible For</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── OPTION E ── -->
+<p class="preview-label">Option E — Benefit Increase</p>
+<p class="preview-desc">Frames 2026 as a window. Use only if benefit amounts actually increased.</p>
+<div class="phone-frame">
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M1 12h2v3H1zM5 9h2v6H5zM9 6h2v9H9zM13 3h2v12h-2z"/></svg>
+        <svg viewBox="0 0 16 16" fill="#0f172a"><path d="M2 5h12v7H2z"/><path d="M14.5 7v3h1V7z"/></svg>
+      </span>
+    </div>
+    <div class="sumo-bar bar-e">
+      <span class="bar-badge"><span class="pulse-dot"></span> NEW</span>
+      <span><strong>2026 benefits increased</strong> — You may qualify for <strong>$4,018/mo</strong></span>
+      <button class="close-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="fake-lp">
+      <p class="lp-heading">Are You 40 Years or Older?</p>
+      <p class="lp-sub">Answer 3 quick questions to check your disability benefit eligibility</p>
+      <span class="lp-btn">See What I Am Eligible For</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
