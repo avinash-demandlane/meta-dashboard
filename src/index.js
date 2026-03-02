@@ -9,8 +9,42 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Auth Config ──────────────────────────────────────────────────────────────
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || "Demandlane@123";
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+if (!DASHBOARD_PASSWORD) {
+  console.error("\n✖  Missing env var: DASHBOARD_PASSWORD");
+  console.error("   Set DASHBOARD_PASSWORD in your .env or Vercel environment variables.\n");
+  process.exit(1);
+}
 const AUTH_TOKEN = crypto.createHash("sha256").update(DASHBOARD_PASSWORD + "_meta_dash").digest("hex").slice(0, 32);
+
+// ─── Login Rate Limiting ─────────────────────────────────────────────────────
+const loginAttempts = new Map(); // ip -> { count, resetAt }
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOCKOUT_MINUTES * 60 * 1000 });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > MAX_LOGIN_ATTEMPTS) return false;
+  return true;
+}
+
+function resetRateLimit(ip) {
+  loginAttempts.delete(ip);
+}
+
+// Clean up stale entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(ip);
+  }
+}, 30 * 60 * 1000);
 
 function parseCookies(req) {
   const cookies = {};
@@ -63,7 +97,10 @@ const LOGIN_PAGE = `<!DOCTYPE html>
       if (res.ok) {
         window.location.reload();
       } else {
-        document.getElementById('err').classList.remove('hidden');
+        const data = await res.json().catch(() => ({}));
+        const errEl = document.getElementById('err');
+        errEl.textContent = data.error || 'Incorrect password';
+        errEl.classList.remove('hidden');
         document.getElementById('pwd').select();
       }
     });
@@ -86,9 +123,16 @@ app.use(express.json());
 
 // ─── Login endpoint (before auth middleware) ──────────────────────────────────
 app.post("/api/login", (req, res) => {
+  const ip = req.headers["x-forwarded-for"] || req.ip;
+  if (!checkRateLimit(ip)) {
+    return res.status(429).json({ success: false, error: `Too many attempts. Try again in ${LOCKOUT_MINUTES} minutes.` });
+  }
+
   if (req.body.password === DASHBOARD_PASSWORD) {
+    resetRateLimit(ip);
     res.cookie("dash_auth", AUTH_TOKEN, {
       httpOnly: true,
+      secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       sameSite: "lax",
     });
