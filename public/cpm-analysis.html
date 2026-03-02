@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CPM Analysis — Diagnostic Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-3">
+            <h1 class="text-xl font-bold text-white">CPM Analysis</h1>
+            <a href="/" class="text-xs text-blue-400 hover:text-blue-300 transition">&larr; Dashboard</a>
+            <a href="/creative-insights.html" class="text-xs text-blue-400 hover:text-blue-300 transition">Creative Insights &rarr;</a>
+          </div>
+          <p class="text-sm text-slate-400">CPM diagnostic &middot; <span class="text-blue-400 font-mono">931494817519408</span></p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="date" id="dateFrom" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+          <span class="text-slate-500 text-sm">to</span>
+          <input type="date" id="dateTo" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+          <button onclick="loadData()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">Refresh</button>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">Campaign:</span>
+        <select id="campaignSelect" onchange="onCampaignSelect()"
+          class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 max-w-xs truncate">
+          <option value="">All Campaigns</option>
+        </select>
+        <span class="text-slate-700 mx-1">|</span>
+        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">Split date:</span>
+        <input type="date" id="splitDate" onchange="onSplitDateChange()"
+          class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Loading -->
+    <div id="globalLoading" class="flex justify-center py-16"><div class="spinner"></div></div>
+
+    <!-- KPI Summary -->
+    <section id="kpiSection" class="hidden">
+      <div id="kpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+    </section>
+
+    <!-- Daily CPM Trend Chart -->
+    <section id="trendSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Daily CPM Trend</h2>
+      <p class="text-xs text-slate-500 mb-4">CPM (amber) &middot; Frequency (purple dashed) &middot; CTR (sky dotted)</p>
+      <div style="height:320px; position:relative;"><canvas id="trendChart"></canvas></div>
+    </section>
+
+    <!-- CPM vs CTR Dual-Axis Chart -->
+    <section id="cpmCtrSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">CPM vs CTR</h2>
+      <p class="text-xs text-slate-500 mb-4">If CTR drops before CPM rises &rarr; creative fatigue signal</p>
+      <div style="height:280px; position:relative;"><canvas id="cpmCtrChart"></canvas></div>
+    </section>
+
+    <!-- Breakdown Tables 2x2 -->
+    <section id="breakdownSection" class="hidden">
+      <h2 class="text-lg font-semibold text-white mb-4">CPM Breakdown</h2>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">By Placement</h3>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-1.5 px-2 font-medium">Placement</th>
+            <th class="text-right py-1.5 px-2 font-medium">Spend</th>
+            <th class="text-right py-1.5 px-2 font-medium">Impr.</th>
+            <th class="text-right py-1.5 px-2 font-medium">CPM</th>
+            <th class="text-right py-1.5 px-2 font-medium">CTR</th>
+            <th class="text-right py-1.5 px-2 font-medium">Freq.</th>
+          </tr></thead><tbody id="placementBody" class="divide-y divide-slate-800/50"></tbody></table></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">By Age</h3>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-1.5 px-2 font-medium">Age</th>
+            <th class="text-right py-1.5 px-2 font-medium">Spend</th>
+            <th class="text-right py-1.5 px-2 font-medium">Impr.</th>
+            <th class="text-right py-1.5 px-2 font-medium">CPM</th>
+            <th class="text-right py-1.5 px-2 font-medium">CTR</th>
+            <th class="text-right py-1.5 px-2 font-medium">Freq.</th>
+          </tr></thead><tbody id="ageBody" class="divide-y divide-slate-800/50"></tbody></table></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">By Gender</h3>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-1.5 px-2 font-medium">Gender</th>
+            <th class="text-right py-1.5 px-2 font-medium">Spend</th>
+            <th class="text-right py-1.5 px-2 font-medium">Impr.</th>
+            <th class="text-right py-1.5 px-2 font-medium">CPM</th>
+            <th class="text-right py-1.5 px-2 font-medium">CTR</th>
+            <th class="text-right py-1.5 px-2 font-medium">Freq.</th>
+          </tr></thead><tbody id="genderBody" class="divide-y divide-slate-800/50"></tbody></table></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">By Device</h3>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-1.5 px-2 font-medium">Device</th>
+            <th class="text-right py-1.5 px-2 font-medium">Spend</th>
+            <th class="text-right py-1.5 px-2 font-medium">Impr.</th>
+            <th class="text-right py-1.5 px-2 font-medium">CPM</th>
+            <th class="text-right py-1.5 px-2 font-medium">CTR</th>
+            <th class="text-right py-1.5 px-2 font-medium">Freq.</th>
+          </tr></thead><tbody id="deviceBody" class="divide-y divide-slate-800/50"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CPM by Campaign -->
+    <section id="campaignSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-3">CPM by Campaign</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-2 px-3 font-medium">Campaign</th>
+            <th class="text-right py-2 px-3 font-medium">Spend</th>
+            <th class="text-right py-2 px-3 font-medium">Impr.</th>
+            <th class="text-right py-2 px-3 font-medium">CPM</th>
+            <th class="text-right py-2 px-3 font-medium">CTR</th>
+            <th class="text-right py-2 px-3 font-medium">Freq.</th>
+          </tr></thead>
+          <tbody id="campaignBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Pre vs Post Comparison -->
+    <section id="comparisonSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Pre vs Post Comparison</h2>
+      <p class="text-xs text-slate-500 mb-4">Split on <span id="splitDateLabel" class="text-blue-400 font-mono"></span> &mdash; change via header</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-2 px-3 font-medium">Metric</th>
+            <th class="text-right py-2 px-3 font-medium">Pre-Period Avg</th>
+            <th class="text-right py-2 px-3 font-medium">Post-Period Avg</th>
+            <th class="text-right py-2 px-3 font-medium">Change</th>
+          </tr></thead>
+          <tbody id="comparisonBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Error -->
+    <div id="errorMsg" class="hidden text-center py-8 text-red-400"></div>
+
+  </main>
+
+  <footer class="text-center py-6 text-xs text-slate-600">
+    CPM Analysis &middot; Ad Account 931494817519408 &middot; Meta Marketing API v21.0
+  </footer>
+
+<script>
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const ACCOUNT_ID = 'act_931494817519408';
+const CURRENCY = '$';
+
+const REGISTRATION_PATTERNS = [
+  'offsite_conversion.fb_pixel_custom.WebsiteRegistrationsCompleted',
+  'offsite_conversion.fb_pixel_custom.website_registrations_completed',
+  'offsite_conversion.fb_pixel_custom.Website registrations completed',
+  'website_registrations_completed',
+  'WebsiteRegistrationsCompleted',
+  'complete_registration',
+  'offsite_conversion.fb_pixel_complete_registration',
+];
+let detectedRegKey = null;
+
+// ─── State ───────────────────────────────────────────────────────────────────
+
+let selectedCampaignId = '';
+let dailyData = [];       // cached daily insights for pre/post re-render
+let trendChartInstance = null;
+let cpmCtrChartInstance = null;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmt(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  return CURRENCY + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  return Number(n).toLocaleString('en-US');
+}
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  return Number(n).toFixed(2) + '%';
+}
+function fmtFreq(n) {
+  if (!n || n === 0) return 'N/A';
+  return Number(n).toFixed(2);
+}
+
+function getDates() {
+  return { from: document.getElementById('dateFrom').value, to: document.getElementById('dateTo').value };
+}
+
+function setDefaultDates() {
+  const today = new Date();
+  const from = new Date(today.getTime() - 30 * 86400000);
+  document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+  document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
+  // Default split date: Feb 15
+  const splitDefault = new Date(today.getFullYear(), 1, 15);
+  if (splitDefault > today) splitDefault.setFullYear(today.getFullYear() - 1);
+  document.getElementById('splitDate').value = splitDefault.toISOString().split('T')[0];
+}
+
+async function api(path) {
+  const res = await fetch(path);
+  if (res.status === 401) { window.location.reload(); return; }
+  const json = await res.json();
+  if (!json.success && json.error) throw new Error(json.error);
+  return json;
+}
+
+// ─── Event Detection ─────────────────────────────────────────────────────────
+
+function flattenActionsRaw(actions) {
+  if (!Array.isArray(actions)) return {};
+  const out = {};
+  for (const a of actions) out[a.action_type] = Number(a.value);
+  return out;
+}
+
+function detectRegistrationKey(actionsObj) {
+  if (detectedRegKey && actionsObj[detectedRegKey] !== undefined) return detectedRegKey;
+  for (const p of REGISTRATION_PATTERNS) {
+    if (actionsObj[p] !== undefined) { detectedRegKey = p; return p; }
+  }
+  for (const key of Object.keys(actionsObj)) {
+    if (key.toLowerCase().includes('registration')) { detectedRegKey = key; return key; }
+  }
+  return null;
+}
+
+function getRegistrations(row) {
+  if (!row.actions || typeof row.actions !== 'object') return 0;
+  const key = detectRegistrationKey(row.actions);
+  return key ? (row.actions[key] || 0) : 0;
+}
+
+function getCostPerReg(row) {
+  if (!row.cost_per_action || typeof row.cost_per_action !== 'object' || !detectedRegKey) return 0;
+  return row.cost_per_action[detectedRegKey] || 0;
+}
+
+// ─── KPI Summary ─────────────────────────────────────────────────────────────
+
+function renderKPIs(daily) {
+  const totalSpend = daily.reduce((s, d) => s + d.spend, 0);
+  const totalImpr = daily.reduce((s, d) => s + d.impressions, 0);
+  const totalClicks = daily.reduce((s, d) => s + d.clicks, 0);
+  const avgCPM = totalImpr > 0 ? (totalSpend / totalImpr) * 1000 : 0;
+  const avgCTR = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0;
+
+  // Weighted avg frequency (only from rows that have it)
+  const freqRows = daily.filter(d => d.frequency > 0);
+  const avgFreq = freqRows.length > 0
+    ? freqRows.reduce((s, d) => s + d.frequency * d.impressions, 0) / freqRows.reduce((s, d) => s + d.impressions, 0)
+    : 0;
+
+  const cards = [
+    { label: 'Avg CPM', value: fmt(avgCPM), color: 'amber' },
+    { label: 'Avg Frequency', value: avgFreq > 0 ? avgFreq.toFixed(2) : 'N/A', color: 'purple' },
+    { label: 'Avg CTR', value: fmtPct(avgCTR), color: 'sky' },
+    { label: 'Total Spend', value: fmt(totalSpend), color: 'blue' },
+  ];
+  const colorMap = {
+    amber: 'border-amber-500/30 bg-amber-500/5',
+    purple: 'border-purple-500/30 bg-purple-500/5',
+    sky: 'border-sky-500/30 bg-sky-500/5',
+    blue: 'border-blue-500/30 bg-blue-500/5',
+  };
+
+  document.getElementById('kpiGrid').innerHTML = cards.map(c => `
+    <div class="border rounded-xl p-3 sm:p-4 ${colorMap[c.color]}">
+      <p class="text-xs text-slate-400 font-medium mb-1">${c.label}</p>
+      <p class="text-lg sm:text-xl font-bold text-white">${c.value}</p>
+    </div>
+  `).join('');
+  document.getElementById('kpiSection').classList.remove('hidden');
+}
+
+// ─── Daily CPM Trend Chart ───────────────────────────────────────────────────
+
+function renderTrendChart(daily) {
+  if (trendChartInstance) trendChartInstance.destroy();
+
+  const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
+  const labels = sorted.map(d => d.date_start);
+  const cpmData = sorted.map(d => d.cpm);
+  const freqData = sorted.map(d => d.frequency > 0 ? d.frequency : null);
+  const ctrData = sorted.map(d => d.ctr);
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'CPM',
+          data: cpmData,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 2,
+          tension: 0.3,
+          yAxisID: 'y',
+          pointRadius: 2,
+          fill: true,
+        },
+        {
+          label: 'Frequency',
+          data: freqData,
+          borderColor: '#a855f7',
+          borderWidth: 2,
+          borderDash: [6, 3],
+          tension: 0.3,
+          yAxisID: 'y1',
+          pointRadius: 2,
+          spanGaps: true,
+        },
+        {
+          label: 'CTR %',
+          data: ctrData,
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          borderDash: [2, 2],
+          tension: 0.3,
+          yAxisID: 'y1',
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true, pointStyle: 'line' },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#f1f5f9',
+          bodyColor: '#cbd5e1',
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === 'CPM') return 'CPM: ' + fmt(ctx.parsed.y);
+              if (ctx.dataset.label === 'Frequency') return 'Freq: ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : 'N/A');
+              if (ctx.dataset.label === 'CTR %') return 'CTR: ' + fmtPct(ctx.parsed.y);
+              return ctx.dataset.label + ': ' + ctx.parsed.y;
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'CPM ($)', color: '#f59e0b', font: { size: 11 } },
+          ticks: { color: '#f59e0b', font: { size: 10 }, callback: v => '$' + v.toFixed(0) },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'Freq / CTR %', color: '#94a3b8', font: { size: 11 } },
+          ticks: { color: '#94a3b8', font: { size: 10 } },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+  document.getElementById('trendSection').classList.remove('hidden');
+}
+
+// ─── CPM vs CTR Dual-Axis Chart ──────────────────────────────────────────────
+
+function renderCpmCtrChart(daily) {
+  if (cpmCtrChartInstance) cpmCtrChartInstance.destroy();
+
+  const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
+  const labels = sorted.map(d => d.date_start);
+
+  const ctx = document.getElementById('cpmCtrChart').getContext('2d');
+  cpmCtrChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'CPM',
+          data: sorted.map(d => d.cpm),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          borderWidth: 2.5,
+          tension: 0.3,
+          yAxisID: 'y',
+          pointRadius: 2,
+          fill: true,
+        },
+        {
+          label: 'CTR %',
+          data: sorted.map(d => d.ctr),
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.08)',
+          borderWidth: 2.5,
+          tension: 0.3,
+          yAxisID: 'y1',
+          pointRadius: 2,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true, pointStyle: 'line' },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#f1f5f9',
+          bodyColor: '#cbd5e1',
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === 'CPM') return 'CPM: ' + fmt(ctx.parsed.y);
+              return 'CTR: ' + fmtPct(ctx.parsed.y);
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'CPM ($)', color: '#f59e0b', font: { size: 11 } },
+          ticks: { color: '#f59e0b', font: { size: 10 }, callback: v => '$' + v.toFixed(0) },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'CTR %', color: '#38bdf8', font: { size: 11 } },
+          ticks: { color: '#38bdf8', font: { size: 10 }, callback: v => v.toFixed(1) + '%' },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+  document.getElementById('cpmCtrSection').classList.remove('hidden');
+}
+
+// ─── Breakdown Tables ────────────────────────────────────────────────────────
+
+function renderBreakdownTable(tbodyId, rows, segmentKey) {
+  const sorted = [...rows].sort((a, b) => b.cpm - a.cpm);
+  if (sorted.length === 0) return;
+
+  const maxCpm = sorted[0].cpm;
+  const minCpm = sorted[sorted.length - 1].cpm;
+
+  document.getElementById(tbodyId).innerHTML = sorted.map(r => {
+    const segment = r[segmentKey] || r.platform || r.device || '\u2014';
+    const isHighest = sorted.length > 1 && r.cpm === maxCpm;
+    const isLowest = sorted.length > 1 && r.cpm === minCpm;
+    const rowCls = isHighest ? 'bg-red-500/8' : isLowest ? 'bg-emerald-500/8' : '';
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowCls}">
+        <td class="py-1.5 px-2 text-white font-medium">${segment}</td>
+        <td class="py-1.5 px-2 text-right">${fmt(r.spend)}</td>
+        <td class="py-1.5 px-2 text-right">${fmtNum(r.impressions)}</td>
+        <td class="py-1.5 px-2 text-right font-semibold ${isHighest ? 'text-red-400' : isLowest ? 'text-emerald-400' : 'text-amber-400'}">${fmt(r.cpm)}</td>
+        <td class="py-1.5 px-2 text-right text-sky-400">${fmtPct(r.ctr)}</td>
+        <td class="py-1.5 px-2 text-right text-purple-400">${fmtFreq(r.frequency)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderAllBreakdowns(placement, age, gender, device) {
+  renderBreakdownTable('placementBody', placement, 'platform');
+  renderBreakdownTable('ageBody', age, 'age');
+  renderBreakdownTable('genderBody', gender, 'gender');
+  renderBreakdownTable('deviceBody', device, 'device');
+  document.getElementById('breakdownSection').classList.remove('hidden');
+}
+
+// ─── CPM by Campaign ─────────────────────────────────────────────────────────
+
+function renderCampaignTable(campaigns) {
+  const rows = campaigns
+    .filter(c => {
+      const ins = c.insights?.data?.[0];
+      return ins && Number(ins.spend || 0) > 0;
+    })
+    .map(c => {
+      const ins = c.insights.data[0];
+      return {
+        name: c.name,
+        spend: Number(ins.spend || 0),
+        impressions: Number(ins.impressions || 0),
+        cpm: Number(ins.cpm || 0),
+        ctr: Number(ins.inline_link_click_ctr || ins.ctr || 0),
+        frequency: Number(ins.frequency || 0),
+      };
+    })
+    .sort((a, b) => b.cpm - a.cpm);
+
+  if (rows.length === 0) return;
+
+  const maxCpm = rows[0].cpm;
+  const minCpm = rows[rows.length - 1].cpm;
+
+  document.getElementById('campaignBody').innerHTML = rows.map(r => {
+    const isHighest = rows.length > 1 && r.cpm === maxCpm;
+    const isLowest = rows.length > 1 && r.cpm === minCpm;
+    const rowCls = isHighest ? 'bg-red-500/8' : isLowest ? 'bg-emerald-500/8' : '';
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowCls}">
+        <td class="py-2 px-3 text-white font-medium max-w-xs truncate">${r.name}</td>
+        <td class="py-2 px-3 text-right">${fmt(r.spend)}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(r.impressions)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${isHighest ? 'text-red-400' : isLowest ? 'text-emerald-400' : 'text-amber-400'}">${fmt(r.cpm)}</td>
+        <td class="py-2 px-3 text-right text-sky-400">${fmtPct(r.ctr)}</td>
+        <td class="py-2 px-3 text-right text-purple-400">${fmtFreq(r.frequency)}</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('campaignSection').classList.remove('hidden');
+}
+
+// ─── Pre vs Post Comparison ──────────────────────────────────────────────────
+
+function renderComparison() {
+  const splitDate = document.getElementById('splitDate').value;
+  if (!splitDate || dailyData.length === 0) return;
+
+  document.getElementById('splitDateLabel').textContent = splitDate;
+
+  const pre = dailyData.filter(d => d.date_start < splitDate);
+  const post = dailyData.filter(d => d.date_start >= splitDate);
+
+  if (pre.length === 0 || post.length === 0) {
+    document.getElementById('comparisonBody').innerHTML = `
+      <tr><td colspan="4" class="py-4 text-center text-slate-500">Not enough data on both sides of split date</td></tr>
+    `;
+    document.getElementById('comparisonSection').classList.remove('hidden');
+    return;
+  }
+
+  function avg(arr, key) {
+    if (arr.length === 0) return 0;
+    return arr.reduce((s, d) => s + (d[key] || 0), 0) / arr.length;
+  }
+
+  function weightedAvg(arr, valKey, weightKey) {
+    const totalWeight = arr.reduce((s, d) => s + (d[weightKey] || 0), 0);
+    if (totalWeight === 0) return 0;
+    return arr.reduce((s, d) => s + (d[valKey] || 0) * (d[weightKey] || 0), 0) / totalWeight;
+  }
+
+  function sumField(arr, key) {
+    return arr.reduce((s, d) => s + (d[key] || 0), 0);
+  }
+
+  // Detect reg event from daily data
+  for (const d of dailyData) {
+    if (d.actions) detectRegistrationKey(d.actions);
+    if (detectedRegKey) break;
+  }
+
+  const preSpend = sumField(pre, 'spend');
+  const postSpend = sumField(post, 'spend');
+  const preImpr = sumField(pre, 'impressions');
+  const postImpr = sumField(post, 'impressions');
+  const preRegs = pre.reduce((s, d) => s + getRegistrations(d), 0);
+  const postRegs = post.reduce((s, d) => s + getRegistrations(d), 0);
+
+  const metrics = [
+    {
+      label: 'CPM',
+      pre: preImpr > 0 ? (preSpend / preImpr) * 1000 : 0,
+      post: postImpr > 0 ? (postSpend / postImpr) * 1000 : 0,
+      format: fmt,
+      badIfUp: true,
+    },
+    {
+      label: 'CTR',
+      pre: weightedAvg(pre, 'ctr', 'impressions'),
+      post: weightedAvg(post, 'ctr', 'impressions'),
+      format: fmtPct,
+      badIfUp: false,
+    },
+    {
+      label: 'CPC',
+      pre: weightedAvg(pre, 'cpc', 'clicks'),
+      post: weightedAvg(post, 'cpc', 'clicks'),
+      format: fmt,
+      badIfUp: true,
+    },
+    {
+      label: 'Frequency',
+      pre: weightedAvg(pre, 'frequency', 'impressions'),
+      post: weightedAvg(post, 'frequency', 'impressions'),
+      format: fmtFreq,
+      badIfUp: true,
+    },
+    {
+      label: 'Daily Spend',
+      pre: avg(pre, 'spend'),
+      post: avg(post, 'spend'),
+      format: fmt,
+      badIfUp: true,
+    },
+    {
+      label: 'Daily Impressions',
+      pre: avg(pre, 'impressions'),
+      post: avg(post, 'impressions'),
+      format: fmtNum,
+      badIfUp: false,
+    },
+    {
+      label: 'Cost/Reg',
+      pre: preRegs > 0 ? preSpend / preRegs : 0,
+      post: postRegs > 0 ? postSpend / postRegs : 0,
+      format: fmt,
+      badIfUp: true,
+    },
+  ];
+
+  document.getElementById('comparisonBody').innerHTML = metrics.map(m => {
+    const pctChange = m.pre !== 0 ? ((m.post - m.pre) / m.pre) * 100 : (m.post > 0 ? 100 : 0);
+    const isUp = pctChange > 0;
+    const isBad = (m.badIfUp && isUp) || (!m.badIfUp && !isUp && pctChange !== 0);
+    const changeColor = Math.abs(pctChange) < 1 ? 'text-slate-400' : isBad ? 'text-red-400' : 'text-emerald-400';
+    const arrow = pctChange > 0 ? '\u2191' : pctChange < 0 ? '\u2193' : '';
+    const preVal = (m.pre === 0 && m.label === 'Cost/Reg') ? '\u2014' : m.format(m.pre);
+    const postVal = (m.post === 0 && m.label === 'Cost/Reg') ? '\u2014' : m.format(m.post);
+
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="py-2 px-3 text-white font-medium">${m.label}</td>
+        <td class="py-2 px-3 text-right">${preVal}</td>
+        <td class="py-2 px-3 text-right">${postVal}</td>
+        <td class="py-2 px-3 text-right font-semibold ${changeColor}">${arrow} ${Math.abs(pctChange).toFixed(1)}%</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('comparisonSection').classList.remove('hidden');
+}
+
+function onSplitDateChange() {
+  renderComparison();
+}
+
+// ─── Campaign Dropdown ───────────────────────────────────────────────────────
+
+function populateCampaignDropdown(campaigns) {
+  const sel = document.getElementById('campaignSelect');
+  sel.innerHTML = '<option value="">All Campaigns</option>';
+  const withSpend = campaigns.filter(c => {
+    const ins = c.insights?.data?.[0];
+    return ins && Number(ins.spend || 0) > 0;
+  });
+  const sorted = [...withSpend].sort((a, b) => a.name.localeCompare(b.name));
+  for (const c of sorted) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  }
+  sel.value = selectedCampaignId || '';
+}
+
+function onCampaignSelect() {
+  selectedCampaignId = document.getElementById('campaignSelect').value;
+  loadData();
+}
+
+// ─── Main Load ───────────────────────────────────────────────────────────────
+
+async function loadData() {
+  const d = getDates();
+  const params = new URLSearchParams();
+  params.set('account_id', ACCOUNT_ID);
+  if (d.from) params.set('date_from', d.from);
+  if (d.to) params.set('date_to', d.to);
+  if (selectedCampaignId) params.set('campaign_ids', selectedCampaignId);
+  const q = '?' + params.toString();
+
+  // Show loading, hide all sections
+  document.getElementById('globalLoading').classList.remove('hidden');
+  ['kpiSection', 'trendSection', 'cpmCtrSection', 'breakdownSection', 'campaignSection', 'comparisonSection', 'errorMsg']
+    .forEach(id => document.getElementById(id).classList.add('hidden'));
+
+  try {
+    const [dailyRes, campaignsRes, placementRes, ageRes, genderRes, deviceRes] = await Promise.all([
+      api('/api/ads/insights/daily' + q),
+      api('/api/ads/campaigns?' + new URLSearchParams({ account_id: ACCOUNT_ID, date_from: d.from, date_to: d.to }).toString()),
+      api('/api/ads/insights' + q + '&breakdown=placement'),
+      api('/api/ads/insights' + q + '&breakdown=age'),
+      api('/api/ads/insights' + q + '&breakdown=gender'),
+      api('/api/ads/insights' + q + '&breakdown=device'),
+    ]);
+
+    dailyData = dailyRes.data || [];
+
+    // Detect reg key from daily data
+    for (const d of dailyData) {
+      if (d.actions) detectRegistrationKey(d.actions);
+      if (detectedRegKey) break;
+    }
+
+    // Campaign dropdown
+    populateCampaignDropdown(campaignsRes.data || []);
+
+    // KPIs
+    renderKPIs(dailyData);
+
+    // Charts
+    renderTrendChart(dailyData);
+    renderCpmCtrChart(dailyData);
+
+    // Breakdowns
+    renderAllBreakdowns(
+      placementRes.data || [],
+      ageRes.data || [],
+      genderRes.data || [],
+      deviceRes.data || []
+    );
+
+    // Campaign CPM table
+    renderCampaignTable(campaignsRes.data || []);
+
+    // Pre/Post comparison
+    renderComparison();
+
+    document.getElementById('globalLoading').classList.add('hidden');
+  } catch (err) {
+    document.getElementById('globalLoading').classList.add('hidden');
+    document.getElementById('errorMsg').textContent = err.message;
+    document.getElementById('errorMsg').classList.remove('hidden');
+  }
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+setDefaultDates();
+loadData();
+</script>
+</body>
+</html>

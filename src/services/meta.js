@@ -97,7 +97,7 @@ async function getCampaigns(accountId, dateFrom, dateTo) {
       "name",
       "status",
       "objective",
-      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas}`,
+      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas}`,
     ].join(","),
     limit: 200,
   });
@@ -119,7 +119,7 @@ async function getAdsets(accountId, dateFrom, dateTo) {
       "name",
       "status",
       "campaign{name}",
-      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type}`,
+      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type}`,
     ].join(","),
     limit: 200,
   });
@@ -132,7 +132,7 @@ async function getInsights(accountId, dateFrom, dateTo, breakdown, campaignIds) 
     : defaultDateRange();
 
   const params = {
-    fields: "spend,impressions,clicks,ctr,cpc,cpm,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas",
+    fields: "spend,impressions,clicks,ctr,cpc,cpm,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas",
     time_range: JSON.stringify({ since: dates.from, until: dates.to }),
   };
 
@@ -158,7 +158,7 @@ async function getDailyInsights(accountId, dateFrom, dateTo, campaignIds) {
     : defaultDateRange();
 
   const params = {
-    fields: "spend,impressions,clicks,ctr,cpc,cpm,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas",
+    fields: "spend,impressions,clicks,ctr,cpc,cpm,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas",
     time_range: JSON.stringify({ since: dates.from, until: dates.to }),
     time_increment: 1,
     limit: 90,
@@ -178,7 +178,7 @@ async function getHourlyInsights(accountId, dateFrom, dateTo, campaignIds) {
     : defaultDateRange();
 
   const params = {
-    fields: "spend,impressions,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type",
+    fields: "spend,impressions,clicks,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type",
     time_range: JSON.stringify({ since: dates.from, until: dates.to }),
     breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
     limit: 500,
@@ -210,7 +210,7 @@ async function getAds(accountId, dateFrom, dateTo) {
       "campaign{name}",
       "adset{name}",
       "adcreatives{thumbnail_url,body,title,call_to_action_type,image_url}",
-      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas}`,
+      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,actions,cost_per_action_type,purchase_roas}`,
     ].join(","),
     limit: 200,
   });
