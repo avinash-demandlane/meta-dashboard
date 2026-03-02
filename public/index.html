@@ -276,6 +276,7 @@ let allAds = [];          // Raw ads from API
 let allCampaigns = [];    // Raw campaigns from API
 let allAdsets = [];       // Raw adsets from API
 let parsedAds = [];       // Parsed/enriched ads
+let accountInsights = [];  // Account-level insights (for KPI when no keyword filters)
 let creativeSortField = 'registrations';
 let creativeSortDesc = true;
 let selectedCampaignId = ''; // '' = all campaigns
@@ -499,6 +500,7 @@ function onCampaignSelect() {
 function applyFilters() {
   const ck = getCampaignKeyword();
   const nk = getAdNameKeyword();
+  const hasKeywords = ck || nk;
 
   // Filter and re-render creatives
   const filtered = filterAds(parsedAds, ck, nk);
@@ -511,6 +513,17 @@ function applyFilters() {
   // Filter and re-render adsets
   const filteredAdsets = filterAdsets(allAdsets, ck);
   renderAdsets(filteredAdsets);
+
+  // Re-aggregate KPI from filtered ads when keywords are active
+  if (hasKeywords) {
+    const agg = aggregateKPIFromAds(filtered);
+    renderKPIFromAggregated(agg);
+  } else {
+    renderKPI(accountInsights);
+  }
+
+  // Re-render naming convention from filtered ads
+  analyzeNamingConvention(filtered);
 
   // Update filter status
   const parts = [];
@@ -543,6 +556,61 @@ function filterAdsets(adsets, campaignKw) {
 }
 
 // ─── KPI Cards ───────────────────────────────────────────────────────────────
+
+function aggregateKPIFromAds(ads) {
+  const spend = ads.reduce((s, a) => s + a.spend, 0);
+  const impressions = ads.reduce((s, a) => s + a.impressions, 0);
+  const clicks = ads.reduce((s, a) => s + a.clicks, 0);
+  const regs = ads.reduce((s, a) => s + a.registrations, 0);
+  const leads = ads.reduce((s, a) => s + a.leads, 0);
+  return {
+    spend,
+    impressions,
+    clicks,
+    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+    cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
+    regs,
+    costReg: regs > 0 ? spend / regs : 0,
+    leads,
+    costLead: leads > 0 ? spend / leads : 0,
+  };
+}
+
+function renderKPIFromAggregated(agg) {
+  const cards = [
+    { label: 'Spend', value: fmt(agg.spend), color: 'blue' },
+    { label: 'Impressions', value: fmtNum(agg.impressions), color: 'purple' },
+    { label: 'Clicks', value: fmtNum(agg.clicks), color: 'cyan' },
+    { label: 'CTR', value: fmtPct(agg.ctr), color: 'green' },
+    { label: 'CPC', value: agg.cpc > 0 ? fmt(agg.cpc) : '—', color: 'amber' },
+    { label: 'CPM', value: agg.cpm > 0 ? fmt(agg.cpm) : '—', color: 'orange' },
+    { label: 'Registrations', value: fmtNum(agg.regs), color: 'emerald' },
+    { label: 'Cost/Reg', value: agg.costReg > 0 ? fmt(agg.costReg) : '—', color: 'rose' },
+    { label: 'Leads', value: fmtNum(agg.leads), color: 'sky' },
+    { label: 'Cost/Lead', value: agg.costLead > 0 ? fmt(agg.costLead) : '—', color: 'pink' },
+  ];
+
+  const colorMap = {
+    blue: 'border-blue-500/30 bg-blue-500/5',
+    purple: 'border-purple-500/30 bg-purple-500/5',
+    cyan: 'border-cyan-500/30 bg-cyan-500/5',
+    green: 'border-green-500/30 bg-green-500/5',
+    amber: 'border-amber-500/30 bg-amber-500/5',
+    orange: 'border-orange-500/30 bg-orange-500/5',
+    emerald: 'border-emerald-500/30 bg-emerald-500/5',
+    rose: 'border-rose-500/30 bg-rose-500/5',
+    sky: 'border-sky-500/30 bg-sky-500/5',
+    pink: 'border-pink-500/30 bg-pink-500/5',
+  };
+
+  document.getElementById('kpiGrid').innerHTML = cards.map(c => `
+    <div class="border rounded-xl p-3 sm:p-4 ${colorMap[c.color]}">
+      <p class="text-xs text-slate-400 font-medium mb-1">${c.label}</p>
+      <p class="text-lg sm:text-xl font-bold text-white">${c.value}</p>
+    </div>
+  `).join('');
+}
 
 function renderKPI(data) {
   const row = data[0] || {};
@@ -1314,8 +1382,9 @@ async function loadAll() {
       }
     }
 
-    // KPI
-    renderKPI(insightsRes.data);
+    // KPI — store for restoring when keyword filters are cleared
+    accountInsights = insightsRes.data;
+    renderKPI(accountInsights);
 
     // Parse ads (use campaign-filtered ads)
     parsedAds = parseAds(filteredAdsRaw);
@@ -1341,9 +1410,8 @@ async function loadAll() {
     document.getElementById('hourlyLoading').classList.add('hidden');
     renderHourly(hourlyRes.data);
 
-    // Naming convention
+    // Naming convention (already rendered by applyFilters above)
     document.getElementById('namingLoading').classList.add('hidden');
-    analyzeNamingConvention(parsedAds);
 
     // Campaigns & Adsets loading done
     document.getElementById('campaignsLoading').classList.add('hidden');
