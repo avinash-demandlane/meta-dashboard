@@ -80,7 +80,7 @@
             class="text-xs font-medium px-3 py-1 rounded-md transition text-slate-400 hover:text-slate-200">Weekly</button>
         </div>
       </div>
-      <p class="text-xs text-slate-500 mb-4">CPM (amber) &middot; Result Rate (emerald) &middot; Frequency (purple dashed) &middot; CTR (sky dotted)</p>
+      <p class="text-xs text-slate-500 mb-4">CPM (amber) &middot; Result Rate x100 (emerald) &middot; Frequency (purple dashed) &middot; CTR (sky dotted)</p>
       <div style="height:320px; position:relative;"><canvas id="trendChart"></canvas></div>
     </section>
 
@@ -422,7 +422,7 @@ function aggregateWeekly(daily) {
       cpm: w.impressions > 0 ? (w.spend / w.impressions) * 1000 : 0,
       frequency: w.freqImpr > 0 ? w.freqWeighted / w.freqImpr : 0,
       ctr: w.impressions > 0 ? (w.clicks / w.impressions) * 100 : 0,
-      resultRate: w.impressions > 0 ? (w.regs / w.impressions) * 100 : 0,
+      resultRate: w.impressions > 0 ? (w.regs / w.impressions) * 100 * 100 : 0,
     }));
 }
 
@@ -457,7 +457,7 @@ function renderTrendChart(daily) {
     ctrData = sorted.map(d => d.ctr);
     resultRateData = sorted.map(d => {
       const regs = getRegistrations(d);
-      return d.impressions > 0 && regs > 0 ? (regs / d.impressions) * 100 : null;
+      return d.impressions > 0 && regs > 0 ? (regs / d.impressions) * 100 * 100 : null;
     });
   }
 
@@ -500,7 +500,7 @@ function renderTrendChart(daily) {
           pointRadius: 2,
         },
         {
-          label: 'Result Rate %',
+          label: 'Result Rate (x100)',
           data: resultRateData,
           borderColor: '#34d399',
           backgroundColor: 'rgba(52, 211, 153, 0.08)',
@@ -533,7 +533,7 @@ function renderTrendChart(daily) {
               if (ctx.dataset.label === 'CPM') return 'CPM: ' + fmt(ctx.parsed.y);
               if (ctx.dataset.label === 'Frequency') return 'Freq: ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : 'N/A');
               if (ctx.dataset.label === 'CTR %') return 'CTR: ' + fmtPct(ctx.parsed.y);
-              if (ctx.dataset.label === 'Result Rate %') return 'Result Rate: ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(4) + '%' : 'N/A');
+              if (ctx.dataset.label === 'Result Rate (x100)') return 'Result Rate (x100): ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : 'N/A');
               return ctx.dataset.label + ': ' + ctx.parsed.y;
             }
           }
