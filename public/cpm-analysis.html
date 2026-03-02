@@ -177,6 +177,75 @@
       </div>
     </section>
 
+    <!-- Reach & Frequency Over Time -->
+    <section id="reachFreqSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Reach &amp; Frequency Over Time</h2>
+      <p class="text-xs text-slate-500 mb-4">Flat/declining reach + rising frequency = audience saturation</p>
+      <div style="height:320px; position:relative;"><canvas id="reachFreqChart"></canvas></div>
+    </section>
+
+    <!-- CPM by Ad Creative -->
+    <section id="creativeCpmSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-3">CPM by Ad Creative (Top 20)</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-2 px-3 font-medium">Ad Name</th>
+            <th class="text-left py-2 px-3 font-medium">Campaign</th>
+            <th class="text-right py-2 px-3 font-medium">Spend</th>
+            <th class="text-right py-2 px-3 font-medium">Impr.</th>
+            <th class="text-right py-2 px-3 font-medium">CPM</th>
+            <th class="text-right py-2 px-3 font-medium">CTR</th>
+            <th class="text-right py-2 px-3 font-medium">Freq.</th>
+          </tr></thead>
+          <tbody id="creativeCpmBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Spend Pacing -->
+    <section id="spendPacingSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Spend Pacing vs CPM</h2>
+      <p class="text-xs text-slate-500 mb-4">Spend increases preceding CPM rises may signal self-competition</p>
+      <div style="height:320px; position:relative;"><canvas id="spendPacingChart"></canvas></div>
+    </section>
+
+    <!-- Day-of-Week Table -->
+    <section id="dowSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-3">Day-of-Week Performance</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-2 px-3 font-medium">Day</th>
+            <th class="text-right py-2 px-3 font-medium">Avg Spend</th>
+            <th class="text-right py-2 px-3 font-medium">Avg CPM</th>
+            <th class="text-right py-2 px-3 font-medium">Avg CTR</th>
+            <th class="text-right py-2 px-3 font-medium">Avg Freq.</th>
+          </tr></thead>
+          <tbody id="dowBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Campaign Creative Mix -->
+    <section id="creativeMixSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Campaign Creative Mix</h2>
+      <p class="text-xs text-slate-500 mb-3">Few active ads + high CPM = creative fatigue</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800"><tr>
+            <th class="text-left py-2 px-3 font-medium">Campaign</th>
+            <th class="text-right py-2 px-3 font-medium"># Active Ads</th>
+            <th class="text-right py-2 px-3 font-medium">Total Spend</th>
+            <th class="text-right py-2 px-3 font-medium">Avg CPM</th>
+            <th class="text-right py-2 px-3 font-medium">Best CPM</th>
+            <th class="text-right py-2 px-3 font-medium">Worst CPM</th>
+          </tr></thead>
+          <tbody id="creativeMixBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Error -->
     <div id="errorMsg" class="hidden text-center py-8 text-red-400"></div>
 
@@ -207,9 +276,12 @@ let detectedRegKey = null;
 
 let selectedCampaignId = '';
 let dailyData = [];       // cached daily insights for pre/post re-render
+let creativesData = [];   // cached creatives for creative mix
 let trendMode = 'daily';  // 'daily' or 'weekly'
 let trendChartInstance = null;
 let cpmCtrChartInstance = null;
+let reachFreqChartInstance = null;
+let spendPacingChartInstance = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -755,6 +827,328 @@ function onSplitDateChange() {
   renderComparison();
 }
 
+// ─── Reach & Frequency Over Time ──────────────────────────────────────────────
+
+function renderReachFreqChart(daily) {
+  if (reachFreqChartInstance) reachFreqChartInstance.destroy();
+
+  const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
+  const labels = sorted.map(d => d.date_start);
+  const reachData = sorted.map(d => d.reach || 0);
+  const freqData = sorted.map(d => d.frequency > 0 ? d.frequency : null);
+
+  // Skip if no reach data at all
+  if (reachData.every(v => v === 0)) {
+    document.getElementById('reachFreqSection').classList.remove('hidden');
+    document.getElementById('reachFreqChart').parentElement.innerHTML =
+      '<p class="text-slate-500 text-sm text-center py-12">Reach data not available for this query (daily breakdown limitation)</p>';
+    return;
+  }
+
+  const ctx = document.getElementById('reachFreqChart').getContext('2d');
+  reachFreqChartInstance = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Reach',
+          data: reachData,
+          backgroundColor: 'rgba(59, 130, 246, 0.5)',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+          yAxisID: 'y',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'Frequency',
+          data: freqData,
+          borderColor: '#a855f7',
+          borderWidth: 2,
+          tension: 0.3,
+          yAxisID: 'y1',
+          pointRadius: 2,
+          spanGaps: true,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+          titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === 'Reach') return 'Reach: ' + fmtNum(ctx.parsed.y);
+              return 'Freq: ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : 'N/A');
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Reach', color: '#3b82f6', font: { size: 11 } },
+          ticks: { color: '#3b82f6', font: { size: 10 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k' : v },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'Frequency', color: '#a855f7', font: { size: 11 } },
+          ticks: { color: '#a855f7', font: { size: 10 } },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+  document.getElementById('reachFreqSection').classList.remove('hidden');
+}
+
+// ─── CPM by Ad Creative ──────────────────────────────────────────────────────
+
+function renderCreativeCpmTable(creatives) {
+  const rows = creatives
+    .filter(ad => {
+      const ins = ad.insights?.data?.[0];
+      return ins && Number(ins.spend || 0) > 0;
+    })
+    .map(ad => {
+      const ins = ad.insights.data[0];
+      const campaignName = ad.campaign?.name || '—';
+      // Client-side campaign filter
+      if (selectedCampaignId && ad.campaign?.id !== selectedCampaignId) return null;
+      return {
+        name: ad.name,
+        campaign: campaignName,
+        campaignId: ad.campaign?.id,
+        spend: Number(ins.spend || 0),
+        impressions: Number(ins.impressions || 0),
+        cpm: Number(ins.cpm || 0),
+        ctr: Number(ins.inline_link_click_ctr || ins.ctr || 0),
+        frequency: Number(ins.frequency || 0),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.cpm - a.cpm)
+    .slice(0, 20);
+
+  if (rows.length === 0) return;
+
+  const maxCpm = rows[0].cpm;
+  const minCpm = rows[rows.length - 1].cpm;
+
+  document.getElementById('creativeCpmBody').innerHTML = rows.map(r => {
+    const isHighest = rows.length > 1 && r.cpm === maxCpm;
+    const isLowest = rows.length > 1 && r.cpm === minCpm;
+    const rowCls = isHighest ? 'bg-red-500/8' : isLowest ? 'bg-emerald-500/8' : '';
+    const truncName = r.name.length > 50 ? r.name.slice(0, 47) + '...' : r.name;
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowCls}">
+        <td class="py-2 px-3 text-white font-medium max-w-xs truncate" title="${r.name}">${truncName}</td>
+        <td class="py-2 px-3 text-slate-400 max-w-[160px] truncate" title="${r.campaign}">${r.campaign}</td>
+        <td class="py-2 px-3 text-right">${fmt(r.spend)}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(r.impressions)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${isHighest ? 'text-red-400' : isLowest ? 'text-emerald-400' : 'text-amber-400'}">${fmt(r.cpm)}</td>
+        <td class="py-2 px-3 text-right text-sky-400">${fmtPct(r.ctr)}</td>
+        <td class="py-2 px-3 text-right text-purple-400">${fmtFreq(r.frequency)}</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('creativeCpmSection').classList.remove('hidden');
+}
+
+// ─── Spend Pacing vs CPM ─────────────────────────────────────────────────────
+
+function renderSpendPacingChart(daily) {
+  if (spendPacingChartInstance) spendPacingChartInstance.destroy();
+
+  const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
+  const labels = sorted.map(d => d.date_start);
+
+  const ctx = document.getElementById('spendPacingChart').getContext('2d');
+  spendPacingChartInstance = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Daily Spend',
+          data: sorted.map(d => d.spend),
+          backgroundColor: 'rgba(34, 197, 94, 0.4)',
+          borderColor: '#22c55e',
+          borderWidth: 1,
+          yAxisID: 'y',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'CPM',
+          data: sorted.map(d => d.cpm),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          borderWidth: 2.5,
+          tension: 0.3,
+          yAxisID: 'y1',
+          pointRadius: 2,
+          fill: true,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+          titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === 'Daily Spend') return 'Spend: ' + fmt(ctx.parsed.y);
+              return 'CPM: ' + fmt(ctx.parsed.y);
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Daily Spend ($)', color: '#22c55e', font: { size: 11 } },
+          ticks: { color: '#22c55e', font: { size: 10 }, callback: v => '$' + v.toFixed(0) },
+          grid: { color: 'rgba(51, 65, 85, 0.3)' },
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'CPM ($)', color: '#f59e0b', font: { size: 11 } },
+          ticks: { color: '#f59e0b', font: { size: 10 }, callback: v => '$' + v.toFixed(0) },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+  document.getElementById('spendPacingSection').classList.remove('hidden');
+}
+
+// ─── Day-of-Week Performance ─────────────────────────────────────────────────
+
+function renderDayOfWeek(daily) {
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const buckets = Array.from({ length: 7 }, () => ({ spend: 0, impressions: 0, clicks: 0, freqW: 0, freqI: 0, count: 0 }));
+
+  for (const d of daily) {
+    const dow = new Date(d.date_start).getDay();
+    const b = buckets[dow];
+    b.spend += d.spend;
+    b.impressions += d.impressions;
+    b.clicks += d.clicks;
+    if (d.frequency > 0) { b.freqW += d.frequency * d.impressions; b.freqI += d.impressions; }
+    b.count++;
+  }
+
+  // Reorder Mon-Sun
+  const ordered = [1,2,3,4,5,6,0].map(i => ({
+    day: dayNames[i],
+    avgSpend: buckets[i].count > 0 ? buckets[i].spend / buckets[i].count : 0,
+    avgCpm: buckets[i].impressions > 0 ? (buckets[i].spend / buckets[i].impressions) * 1000 : 0,
+    avgCtr: buckets[i].impressions > 0 ? (buckets[i].clicks / buckets[i].impressions) * 100 : 0,
+    avgFreq: buckets[i].freqI > 0 ? buckets[i].freqW / buckets[i].freqI : 0,
+  })).filter(r => r.avgSpend > 0);
+
+  if (ordered.length === 0) return;
+
+  const cpms = ordered.map(r => r.avgCpm);
+  const maxCpm = Math.max(...cpms);
+  const minCpm = Math.min(...cpms);
+
+  document.getElementById('dowBody').innerHTML = ordered.map(r => {
+    const isHighest = ordered.length > 1 && r.avgCpm === maxCpm;
+    const isLowest = ordered.length > 1 && r.avgCpm === minCpm;
+    const rowCls = isHighest ? 'bg-red-500/8' : isLowest ? 'bg-emerald-500/8' : '';
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowCls}">
+        <td class="py-2 px-3 text-white font-medium">${r.day}</td>
+        <td class="py-2 px-3 text-right">${fmt(r.avgSpend)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${isHighest ? 'text-red-400' : isLowest ? 'text-emerald-400' : 'text-amber-400'}">${fmt(r.avgCpm)}</td>
+        <td class="py-2 px-3 text-right text-sky-400">${fmtPct(r.avgCtr)}</td>
+        <td class="py-2 px-3 text-right text-purple-400">${fmtFreq(r.avgFreq)}</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('dowSection').classList.remove('hidden');
+}
+
+// ─── Campaign Creative Mix ───────────────────────────────────────────────────
+
+function renderCreativeMix(creatives) {
+  const groups = {};
+  for (const ad of creatives) {
+    const ins = ad.insights?.data?.[0];
+    if (!ins || Number(ins.spend || 0) <= 0) continue;
+    const cName = ad.campaign?.name || '—';
+    const cId = ad.campaign?.id || cName;
+    // Client-side campaign filter
+    if (selectedCampaignId && cId !== selectedCampaignId) continue;
+    if (!groups[cId]) groups[cId] = { name: cName, ads: 0, spend: 0, cpms: [] };
+    const g = groups[cId];
+    g.ads++;
+    g.spend += Number(ins.spend || 0);
+    g.cpms.push(Number(ins.cpm || 0));
+  }
+
+  const rows = Object.values(groups)
+    .map(g => ({
+      name: g.name,
+      ads: g.ads,
+      spend: g.spend,
+      avgCpm: g.cpms.reduce((s, v) => s + v, 0) / g.cpms.length,
+      bestCpm: Math.min(...g.cpms),
+      worstCpm: Math.max(...g.cpms),
+    }))
+    .sort((a, b) => b.avgCpm - a.avgCpm);
+
+  if (rows.length === 0) return;
+
+  const maxAvg = rows[0].avgCpm;
+  const minAvg = rows[rows.length - 1].avgCpm;
+
+  document.getElementById('creativeMixBody').innerHTML = rows.map(r => {
+    const isHighest = rows.length > 1 && r.avgCpm === maxAvg;
+    const isLowest = rows.length > 1 && r.avgCpm === minAvg;
+    const rowCls = isHighest ? 'bg-red-500/8' : isLowest ? 'bg-emerald-500/8' : '';
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowCls}">
+        <td class="py-2 px-3 text-white font-medium max-w-xs truncate">${r.name}</td>
+        <td class="py-2 px-3 text-right">${r.ads}</td>
+        <td class="py-2 px-3 text-right">${fmt(r.spend)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${isHighest ? 'text-red-400' : isLowest ? 'text-emerald-400' : 'text-amber-400'}">${fmt(r.avgCpm)}</td>
+        <td class="py-2 px-3 text-right text-emerald-400">${fmt(r.bestCpm)}</td>
+        <td class="py-2 px-3 text-right text-red-400">${fmt(r.worstCpm)}</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('creativeMixSection').classList.remove('hidden');
+}
+
 // ─── Campaign Dropdown ───────────────────────────────────────────────────────
 
 function populateCampaignDropdown(campaigns) {
@@ -792,17 +1186,19 @@ async function loadData() {
 
   // Show loading, hide all sections
   document.getElementById('globalLoading').classList.remove('hidden');
-  ['kpiSection', 'trendSection', 'cpmCtrSection', 'breakdownSection', 'campaignSection', 'comparisonSection', 'errorMsg']
+  ['kpiSection', 'trendSection', 'cpmCtrSection', 'breakdownSection', 'campaignSection', 'comparisonSection',
+   'reachFreqSection', 'creativeCpmSection', 'spendPacingSection', 'dowSection', 'creativeMixSection', 'errorMsg']
     .forEach(id => document.getElementById(id).classList.add('hidden'));
 
   try {
-    const [dailyRes, campaignsRes, placementRes, ageRes, genderRes, deviceRes] = await Promise.all([
+    const [dailyRes, campaignsRes, placementRes, ageRes, genderRes, deviceRes, creativesRes] = await Promise.all([
       api('/api/ads/insights/daily' + q),
       api('/api/ads/campaigns?' + new URLSearchParams({ account_id: ACCOUNT_ID, date_from: d.from, date_to: d.to }).toString()),
       api('/api/ads/insights' + q + '&breakdown=placement'),
       api('/api/ads/insights' + q + '&breakdown=age'),
       api('/api/ads/insights' + q + '&breakdown=gender'),
       api('/api/ads/insights' + q + '&breakdown=device'),
+      api('/api/ads/creatives?' + new URLSearchParams({ account_id: ACCOUNT_ID, date_from: d.from, date_to: d.to }).toString()),
     ]);
 
     dailyData = dailyRes.data || [];
@@ -836,6 +1232,14 @@ async function loadData() {
 
     // Pre/Post comparison
     renderComparison();
+
+    // New diagnostic sections
+    creativesData = creativesRes.data || [];
+    renderReachFreqChart(dailyData);
+    renderCreativeCpmTable(creativesData);
+    renderSpendPacingChart(dailyData);
+    renderDayOfWeek(dailyData);
+    renderCreativeMix(creativesData);
 
     document.getElementById('globalLoading').classList.add('hidden');
   } catch (err) {

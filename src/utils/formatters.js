@@ -39,6 +39,7 @@ function formatInsightRow(row) {
     cpc: Number(row.cost_per_inline_link_click || row.cpc || 0),
     cpm: Number(row.cpm || 0),
     frequency: Number(row.frequency || 0),
+    reach: Number(row.reach || 0),
     actions: flattenActions(row.actions),
     cost_per_action: flattenCostPerAction(row.cost_per_action_type),
     purchase_roas: row.purchase_roas
