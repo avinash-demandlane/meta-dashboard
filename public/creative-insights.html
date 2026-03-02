@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Creative Insights — Attribute Performance Analysis</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-3">
+            <h1 class="text-xl font-bold text-white">Creative Insights</h1>
+            <a href="/" class="text-xs text-blue-400 hover:text-blue-300 transition">&larr; Dashboard</a>
+          </div>
+          <p class="text-sm text-slate-400">Attribute-level performance analysis &middot; <span class="text-blue-400 font-mono">931494817519408</span></p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="date" id="dateFrom" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+          <span class="text-slate-500 text-sm">to</span>
+          <input type="date" id="dateTo" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+          <button onclick="loadData()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">Refresh</button>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">Campaign:</span>
+        <select id="campaignSelect" onchange="onCampaignSelect()"
+          class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 max-w-xs truncate">
+          <option value="">All Campaigns</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Loading -->
+    <div id="globalLoading" class="flex justify-center py-16"><div class="spinner"></div></div>
+
+    <!-- Summary KPIs -->
+    <section id="kpiSection" class="hidden">
+      <div id="kpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+    </section>
+
+    <!-- Detected Events -->
+    <div id="detectedEvents" class="hidden flex flex-wrap gap-2">
+      <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full px-3 py-1">
+        Reg: <span id="detectedRegName" class="font-mono"></span>
+      </span>
+      <span id="detectedLeadBadge" class="text-xs bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full px-3 py-1 hidden">
+        Lead: <span id="detectedLeadName" class="font-mono"></span>
+      </span>
+    </div>
+
+    <!-- Dimension Breakdowns -->
+    <section id="dimensionsSection" class="hidden space-y-6">
+      <h2 class="text-lg font-semibold text-white">Dimension Breakdowns <span class="text-sm font-normal text-slate-400">(sorted by Cost/Reg, best first)</span></h2>
+      <div id="dimensionsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+    </section>
+
+    <!-- Top 10 Winning Combinations -->
+    <section id="winnersSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Top 10 Winning Combinations <span class="text-sm font-normal text-emerald-400">(lowest Cost/Reg)</span></h2>
+      <p class="text-xs text-slate-500 mb-4">Cross-dimensional combos with 2+ registrations</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-2 px-3 font-medium">Combination</th>
+              <th class="text-right py-2 px-3 font-medium">Ads</th>
+              <th class="text-right py-2 px-3 font-medium">Spend</th>
+              <th class="text-right py-2 px-3 font-medium">Regs.</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
+              <th class="text-right py-2 px-3 font-medium">Leads</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
+            </tr>
+          </thead>
+          <tbody id="winnersBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Bottom 10 Performers -->
+    <section id="losersSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-1">Bottom 10 Performers <span class="text-sm font-normal text-red-400">(highest Cost/Reg)</span></h2>
+      <p class="text-xs text-slate-500 mb-4">Combos to consider pausing &mdash; 2+ registrations, sorted worst first</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-2 px-3 font-medium">Combination</th>
+              <th class="text-right py-2 px-3 font-medium">Ads</th>
+              <th class="text-right py-2 px-3 font-medium">Spend</th>
+              <th class="text-right py-2 px-3 font-medium">Regs.</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
+              <th class="text-right py-2 px-3 font-medium">Leads</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
+            </tr>
+          </thead>
+          <tbody id="losersBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Error -->
+    <div id="errorMsg" class="hidden text-center py-8 text-red-400"></div>
+
+  </main>
+
+  <footer class="text-center py-6 text-xs text-slate-600">
+    Creative Insights &middot; Ad Account 931494817519408 &middot; Meta Marketing API v21.0
+  </footer>
+
+<script>
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const ACCOUNT_ID = 'act_931494817519408';
+const CURRENCY = '$';
+
+const REGISTRATION_PATTERNS = [
+  'offsite_conversion.fb_pixel_custom.WebsiteRegistrationsCompleted',
+  'offsite_conversion.fb_pixel_custom.website_registrations_completed',
+  'offsite_conversion.fb_pixel_custom.Website registrations completed',
+  'website_registrations_completed',
+  'WebsiteRegistrationsCompleted',
+  'complete_registration',
+  'offsite_conversion.fb_pixel_complete_registration',
+];
+let detectedRegKey = null;
+
+const LEAD_PATTERNS = [
+  'offsite_conversion.fb_pixel_custom.Website leads',
+  'offsite_conversion.fb_pixel_custom.WebsiteLeads',
+  'offsite_conversion.fb_pixel_custom.website_leads',
+  'lead',
+  'offsite_conversion.fb_pixel_lead',
+];
+let detectedLeadKey = null;
+
+// ─── State ───────────────────────────────────────────────────────────────────
+
+let selectedCampaignId = '';
+let dimensionCharts = {}; // track Chart.js instances for cleanup
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmt(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  return CURRENCY + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  return Number(n).toLocaleString('en-US');
+}
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  return Number(n).toFixed(2) + '%';
+}
+
+function getDates() {
+  return { from: document.getElementById('dateFrom').value, to: document.getElementById('dateTo').value };
+}
+
+function setDefaultDates() {
+  const today = new Date();
+  const from = new Date(today.getTime() - 7 * 86400000);
+  document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+  document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
+}
+
+async function api(path) {
+  const res = await fetch(path);
+  if (res.status === 401) { window.location.reload(); return; }
+  const json = await res.json();
+  if (!json.success && json.error) throw new Error(json.error);
+  return json;
+}
+
+// ─── Event Detection ─────────────────────────────────────────────────────────
+
+function flattenActionsRaw(actions) {
+  if (!Array.isArray(actions)) return {};
+  const out = {};
+  for (const a of actions) out[a.action_type] = Number(a.value);
+  return out;
+}
+
+function flattenCostRaw(costPer) {
+  if (!Array.isArray(costPer)) return {};
+  const out = {};
+  for (const a of costPer) out[a.action_type] = Number(a.value);
+  return out;
+}
+
+function detectRegistrationKey(actionsObj) {
+  if (detectedRegKey && actionsObj[detectedRegKey] !== undefined) return detectedRegKey;
+  for (const p of REGISTRATION_PATTERNS) {
+    if (actionsObj[p] !== undefined) { detectedRegKey = p; return p; }
+  }
+  for (const key of Object.keys(actionsObj)) {
+    if (key.toLowerCase().includes('registration')) { detectedRegKey = key; return key; }
+  }
+  return null;
+}
+
+function getRegistrations(actionsObj) {
+  if (!actionsObj || typeof actionsObj !== 'object') return 0;
+  const key = detectRegistrationKey(actionsObj);
+  return key ? (actionsObj[key] || 0) : 0;
+}
+
+function getCostPerReg(costPerObj) {
+  if (!costPerObj || typeof costPerObj !== 'object' || !detectedRegKey) return 0;
+  return costPerObj[detectedRegKey] || 0;
+}
+
+function detectLeadKey(actionsObj) {
+  if (detectedLeadKey && actionsObj[detectedLeadKey] !== undefined) return detectedLeadKey;
+  for (const p of LEAD_PATTERNS) {
+    if (actionsObj[p] !== undefined) { detectedLeadKey = p; return p; }
+  }
+  for (const key of Object.keys(actionsObj)) {
+    if (key.toLowerCase().includes('lead')) { detectedLeadKey = key; return key; }
+  }
+  return null;
+}
+
+function getLeads(actionsObj) {
+  if (!actionsObj || typeof actionsObj !== 'object') return 0;
+  const key = detectLeadKey(actionsObj);
+  return key ? (actionsObj[key] || 0) : 0;
+}
+
+function getCostPerLead(costPerObj) {
+  if (!costPerObj || typeof costPerObj !== 'object' || !detectedLeadKey) return 0;
+  return costPerObj[detectedLeadKey] || 0;
+}
+
+function scanForEvents(ads) {
+  for (const ad of ads) {
+    const ins = ad.insights?.data?.[0];
+    if (!ins) continue;
+    const actions = flattenActionsRaw(ins.actions);
+    detectRegistrationKey(actions);
+    detectLeadKey(actions);
+    if (detectedRegKey && detectedLeadKey) break;
+  }
+  if (detectedRegKey) {
+    document.getElementById('detectedEvents').classList.remove('hidden');
+    document.getElementById('detectedRegName').textContent = detectedRegKey;
+  }
+  if (detectedLeadKey) {
+    document.getElementById('detectedEvents').classList.remove('hidden');
+    document.getElementById('detectedLeadBadge').classList.remove('hidden');
+    document.getElementById('detectedLeadName').textContent = detectedLeadKey;
+  }
+}
+
+// ─── Enhanced Creative Name Parser ───────────────────────────────────────────
+
+const KNOWN_FORMATS = ['spokesperson', 'skit', 'skitmontage', 'podcast', 'static', 'testimonial'];
+const KNOWN_SETTINGS = ['living_room', 'livingroom', 'outdoor', 'studio', 'indoor', 'car', 'kitchen', 'grocery_store', 'grocerystore'];
+const KNOWN_GENDERS = { 'female': 'female', 'male': 'male', 'multi': 'multi', 'f': 'female', 'm': 'male' };
+const KNOWN_AGES = { 'young': 'young', 'old': 'older', 'older': 'older', 'over50': 'older', 'over55': 'older', 'imover50': 'older' };
+const KNOWN_ETHNICITIES = ['white', 'black'];
+const KNOWN_SOURCES = ['real', 'ai'];
+const KNOWN_HOOKS = ['stat', 'story', 'question', 'result', 'shock', 'pain_point', 'painpoint'];
+const KNOWN_ELEMENTS = [
+  'cat', 'puppet', 'parrot', 'blindfold', 'vhs', 'tv', 'fishing', 'car',
+  'polarbear', 'puppy', 'teddy', 'icecream', 'cycle', 'halloween',
+  'stadium', 'gardening', 'lamb', 'noteonback'
+];
+
+function parseCreativeName(name) {
+  const result = {
+    format: null, setting: null, gender: null, age: null,
+    ethnicity: null, source: null, hook: null, element: null
+  };
+
+  if (!name) return result;
+  const lower = name.toLowerCase().trim();
+
+  // ── Pipe format: FMT:Spokesperson|ANG:Denied-Benefits|GEN:F|SETTG:Outdoor|ELM:Cat
+  if (lower.includes('|') && lower.includes(':')) {
+    const parts = {};
+    for (const seg of lower.split('|')) {
+      const [k, ...vParts] = seg.split(':');
+      parts[k.trim()] = vParts.join(':').trim().replace(/-/g, '_');
+    }
+    if (parts['fmt']) result.format = matchFormat(parts['fmt']);
+    if (parts['settg']) result.setting = matchSetting(parts['settg']);
+    if (parts['gen']) result.gender = matchGender(parts['gen']);
+    if (parts['elm']) result.element = matchElement(parts['elm']);
+    // ANG can encode age or hook
+    if (parts['ang']) {
+      const ang = parts['ang'];
+      const ageMatch = matchAge(ang);
+      if (ageMatch) result.age = ageMatch;
+      else result.hook = matchHook(ang) || ang.replace(/_/g, ' ');
+    }
+    return result;
+  }
+
+  // ── FMT_ format: FMT_Spokesperson_ANG_Over50_GEN_F_SETTG_Indoor_ELM_Cat
+  if (lower.startsWith('fmt_')) {
+    const parts = {};
+    const regex = /(fmt|ang|gen|settg|elm)_([^_]+(?:_[^_]+)*?)(?=_(?:fmt|ang|gen|settg|elm)_|$)/gi;
+    let m;
+    while ((m = regex.exec(name)) !== null) {
+      parts[m[1].toLowerCase()] = m[2].toLowerCase().replace(/-/g, '_');
+    }
+    if (parts['fmt']) result.format = matchFormat(parts['fmt']);
+    if (parts['settg']) result.setting = matchSetting(parts['settg']);
+    if (parts['gen']) result.gender = matchGender(parts['gen']);
+    if (parts['elm']) result.element = matchElement(parts['elm']);
+    if (parts['ang']) {
+      const ang = parts['ang'];
+      const ageMatch = matchAge(ang);
+      if (ageMatch) result.age = ageMatch;
+      else result.hook = matchHook(ang) || ang.replace(/_/g, ' ');
+    }
+    return result;
+  }
+
+  // ── Underscore format: {format}_{setting}_{gender}_{age}_{ethnicity}_{source}_{hook}_{slug}
+  // Skip generic names
+  if (/^(static ad|ad \d|ads$)/i.test(lower)) {
+    result.format = 'static';
+    return result;
+  }
+
+  const tokens = lower.split('_');
+
+  // Format = first token
+  result.format = matchFormat(tokens[0]);
+
+  // Scan remaining tokens for known values
+  for (let i = 1; i < tokens.length; i++) {
+    const t = tokens[i];
+    // Check 2-token settings like living_room, grocery_store
+    if (i + 1 < tokens.length) {
+      const pair = t + '_' + tokens[i + 1];
+      const settingMatch = matchSetting(pair);
+      if (settingMatch) { result.setting = settingMatch; i++; continue; }
+      // pain_point hook
+      if (pair === 'pain_point') { result.hook = 'pain_point'; i++; continue; }
+    }
+    if (!result.setting) { const s = matchSetting(t); if (s) { result.setting = s; continue; } }
+    if (!result.gender) { const g = matchGender(t); if (g) { result.gender = g; continue; } }
+    if (!result.age) { const a = matchAge(t); if (a) { result.age = a; continue; } }
+    if (!result.ethnicity) { const e = matchEthnicity(t); if (e) { result.ethnicity = e; continue; } }
+    if (!result.source) { const src = matchSource(t); if (src) { result.source = src; continue; } }
+    if (!result.hook) { const h = matchHook(t); if (h) { result.hook = h; continue; } }
+    if (!result.element) { const el = matchElement(t); if (el) { result.element = el; continue; } }
+  }
+
+  return result;
+}
+
+function matchFormat(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  for (const f of KNOWN_FORMATS) {
+    if (l === f || l.startsWith(f)) return f;
+  }
+  return l || null;
+}
+
+function matchSetting(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  const map = { 'livingroom': 'living_room', 'living_room': 'living_room', 'grocerystore': 'grocery_store', 'grocery_store': 'grocery_store' };
+  if (map[l]) return map[l];
+  for (const st of KNOWN_SETTINGS) {
+    if (l === st || l === st.replace(/_/g, '')) return st.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(' ', '_').toLowerCase();
+  }
+  // Normalize known settings
+  const settingMap = {
+    'outdoor': 'outdoor', 'studio': 'studio', 'indoor': 'indoor',
+    'car': 'car', 'kitchen': 'kitchen'
+  };
+  return settingMap[l] || null;
+}
+
+function matchGender(s) {
+  if (!s) return null;
+  return KNOWN_GENDERS[s.toLowerCase()] || null;
+}
+
+function matchAge(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  for (const [k, v] of Object.entries(KNOWN_AGES)) {
+    if (l === k || l.includes(k)) return v;
+  }
+  return null;
+}
+
+function matchEthnicity(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  for (const e of KNOWN_ETHNICITIES) {
+    if (l === e) return e;
+  }
+  return null;
+}
+
+function matchSource(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  for (const src of KNOWN_SOURCES) {
+    if (l === src) return src;
+  }
+  return null;
+}
+
+function matchHook(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  const hookMap = { 'painpoint': 'pain_point' };
+  if (hookMap[l]) return hookMap[l];
+  for (const h of KNOWN_HOOKS) {
+    if (l === h || l === h.replace(/_/g, '')) return h;
+  }
+  return null;
+}
+
+function matchElement(s) {
+  if (!s) return null;
+  const l = s.toLowerCase();
+  for (const e of KNOWN_ELEMENTS) {
+    if (l === e) return e;
+  }
+  return null;
+}
+
+// ─── Parse Ads ───────────────────────────────────────────────────────────────
+
+function parseAds(ads) {
+  return ads.map(ad => {
+    const ins = ad.insights?.data?.[0] || {};
+    const actions = flattenActionsRaw(ins.actions);
+    const costPer = flattenCostRaw(ins.cost_per_action_type);
+    return {
+      name: ad.name || '\u2014',
+      spend: Number(ins.spend || 0),
+      impressions: Number(ins.impressions || 0),
+      clicks: Number(ins.clicks || 0),
+      registrations: getRegistrations(actions),
+      leads: getLeads(actions),
+      parsed: parseCreativeName(ad.name),
+    };
+  });
+}
+
+// ─── KPI Rendering ───────────────────────────────────────────────────────────
+
+function renderKPIs(ads) {
+  const totalAds = ads.length;
+  const spend = ads.reduce((s, a) => s + a.spend, 0);
+  const regs = ads.reduce((s, a) => s + a.registrations, 0);
+  const leads = ads.reduce((s, a) => s + a.leads, 0);
+  const costReg = regs > 0 ? spend / regs : 0;
+  const costLead = leads > 0 ? spend / leads : 0;
+
+  const cards = [
+    { label: 'Ads Analyzed', value: fmtNum(totalAds), color: 'blue' },
+    { label: 'Total Spend', value: fmt(spend), color: 'purple' },
+    { label: 'Avg Cost/Reg', value: costReg > 0 ? fmt(costReg) : '\u2014', color: 'emerald' },
+    { label: 'Avg Cost/Lead', value: costLead > 0 ? fmt(costLead) : '\u2014', color: 'sky' },
+  ];
+  const colorMap = {
+    blue: 'border-blue-500/30 bg-blue-500/5',
+    purple: 'border-purple-500/30 bg-purple-500/5',
+    emerald: 'border-emerald-500/30 bg-emerald-500/5',
+    sky: 'border-sky-500/30 bg-sky-500/5',
+  };
+
+  document.getElementById('kpiGrid').innerHTML = cards.map(c => `
+    <div class="border rounded-xl p-3 sm:p-4 ${colorMap[c.color]}">
+      <p class="text-xs text-slate-400 font-medium mb-1">${c.label}</p>
+      <p class="text-lg sm:text-xl font-bold text-white">${c.value}</p>
+    </div>
+  `).join('');
+  document.getElementById('kpiSection').classList.remove('hidden');
+}
+
+// ─── Dimension Analysis ──────────────────────────────────────────────────────
+
+const DIMENSION_LABELS = {
+  format: 'Format', setting: 'Setting', gender: 'Gender', age: 'Age',
+  ethnicity: 'Ethnicity', source: 'Content Source', hook: 'Hook Type', element: 'Visual Element'
+};
+const ALL_DIMENSIONS = ['format', 'setting', 'gender', 'age', 'ethnicity', 'source', 'hook', 'element'];
+
+function groupByDimension(ads, dim) {
+  const groups = {};
+  for (const ad of ads) {
+    const val = ad.parsed[dim];
+    if (!val) continue; // skip nulls
+    if (!groups[val]) groups[val] = { name: val, ads: 0, spend: 0, impressions: 0, clicks: 0, registrations: 0, leads: 0 };
+    const g = groups[val];
+    g.ads++;
+    g.spend += ad.spend;
+    g.impressions += ad.impressions;
+    g.clicks += ad.clicks;
+    g.registrations += ad.registrations;
+    g.leads += ad.leads;
+  }
+  // Compute derived metrics
+  for (const g of Object.values(groups)) {
+    g.costPerReg = g.registrations > 0 ? g.spend / g.registrations : Infinity;
+    g.costPerLead = g.leads > 0 ? g.spend / g.leads : Infinity;
+    g.ctr = g.impressions > 0 ? (g.clicks / g.impressions) * 100 : 0;
+  }
+  return Object.values(groups).sort((a, b) => a.costPerReg - b.costPerReg);
+}
+
+function getBarColor(index, total) {
+  // Green → Yellow → Red gradient
+  if (total <= 1) return 'rgba(16, 185, 129, 0.7)';
+  const ratio = index / (total - 1);
+  if (ratio < 0.5) {
+    // Green to Yellow
+    const t = ratio * 2;
+    const r = Math.round(16 + t * (234 - 16));
+    const g = Math.round(185 + t * (179 - 185));
+    const b = Math.round(129 - t * 129);
+    return `rgba(${r}, ${g}, ${b}, 0.7)`;
+  } else {
+    // Yellow to Red
+    const t = (ratio - 0.5) * 2;
+    const r = Math.round(234 + t * (239 - 234));
+    const g = Math.round(179 - t * 179);
+    const b = Math.round(0 + t * 68);
+    return `rgba(${r}, ${g}, ${b}, 0.7)`;
+  }
+}
+
+function renderDimensions(ads) {
+  // Destroy old charts
+  for (const c of Object.values(dimensionCharts)) c.destroy();
+  dimensionCharts = {};
+
+  const container = document.getElementById('dimensionsGrid');
+  container.innerHTML = '';
+
+  let renderedAny = false;
+
+  for (const dim of ALL_DIMENSIONS) {
+    const groups = groupByDimension(ads, dim);
+    // Only show dimensions with 2+ distinct values
+    if (groups.length < 2) continue;
+    renderedAny = true;
+
+    const cardId = 'dim-' + dim;
+    const chartId = 'chart-' + dim;
+
+    // Find best/worst for highlighting
+    const withRegs = groups.filter(g => g.registrations > 0);
+    const bestName = withRegs.length > 0 ? withRegs[0].name : null;
+    const worstName = withRegs.length > 1 ? withRegs[withRegs.length - 1].name : null;
+
+    const card = document.createElement('div');
+    card.className = 'bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5';
+    card.innerHTML = `
+      <h3 class="text-base font-semibold text-white mb-3">${DIMENSION_LABELS[dim]}</h3>
+      <div style="height: ${Math.max(120, groups.length * 32 + 40)}px; position: relative;" class="mb-4">
+        <canvas id="${chartId}"></canvas>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-1.5 px-2 font-medium">Value</th>
+              <th class="text-right py-1.5 px-2 font-medium">Ads</th>
+              <th class="text-right py-1.5 px-2 font-medium">Spend</th>
+              <th class="text-right py-1.5 px-2 font-medium">Regs</th>
+              <th class="text-right py-1.5 px-2 font-medium">Cost/Reg</th>
+              <th class="text-right py-1.5 px-2 font-medium">Leads</th>
+              <th class="text-right py-1.5 px-2 font-medium">Cost/Lead</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/50">
+            ${groups.map(g => {
+              const isBest = g.name === bestName;
+              const isWorst = g.name === worstName && worstName !== bestName;
+              const rowCls = isBest ? 'bg-emerald-500/5' : isWorst ? 'bg-red-500/5' : '';
+              const nameCls = isBest ? 'text-emerald-400 font-semibold' : isWorst ? 'text-red-400 font-semibold' : 'text-white';
+              return `
+                <tr class="hover:bg-slate-800/50 ${rowCls}">
+                  <td class="py-1.5 px-2 ${nameCls}">${g.name}${isBest ? ' <span class="text-amber-300">&#9733;</span>' : ''}</td>
+                  <td class="py-1.5 px-2 text-right">${g.ads}</td>
+                  <td class="py-1.5 px-2 text-right">${fmt(g.spend)}</td>
+                  <td class="py-1.5 px-2 text-right font-semibold ${g.registrations > 0 ? 'text-emerald-400' : 'text-slate-500'}">${g.registrations > 0 ? fmtNum(g.registrations) : '\u2014'}</td>
+                  <td class="py-1.5 px-2 text-right ${g.costPerReg < Infinity ? 'text-rose-400' : 'text-slate-500'}">${g.costPerReg < Infinity ? fmt(g.costPerReg) : '\u2014'}</td>
+                  <td class="py-1.5 px-2 text-right font-semibold ${g.leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${g.leads > 0 ? fmtNum(g.leads) : '\u2014'}</td>
+                  <td class="py-1.5 px-2 text-right ${g.costPerLead < Infinity ? 'text-pink-400' : 'text-slate-500'}">${g.costPerLead < Infinity ? fmt(g.costPerLead) : '\u2014'}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    container.appendChild(card);
+
+    // Render horizontal bar chart
+    const onlyWithRegs = groups.filter(g => g.costPerReg < Infinity);
+    if (onlyWithRegs.length > 0) {
+      const ctx = document.getElementById(chartId).getContext('2d');
+      dimensionCharts[dim] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: onlyWithRegs.map(g => g.name),
+          datasets: [{
+            label: 'Cost/Reg',
+            data: onlyWithRegs.map(g => g.costPerReg),
+            backgroundColor: onlyWithRegs.map((_, i) => getBarColor(i, onlyWithRegs.length)),
+            borderRadius: 4,
+            barThickness: 20,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1e293b',
+              borderColor: '#334155',
+              borderWidth: 1,
+              titleColor: '#f1f5f9',
+              bodyColor: '#cbd5e1',
+              callbacks: {
+                label: ctx => 'Cost/Reg: ' + fmt(ctx.parsed.x),
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#64748b', font: { size: 11 }, callback: v => '$' + v.toFixed(0) },
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+            },
+            y: {
+              ticks: { color: '#e2e8f0', font: { size: 11 } },
+              grid: { display: false },
+            }
+          }
+        }
+      });
+    }
+  }
+
+  if (renderedAny) {
+    document.getElementById('dimensionsSection').classList.remove('hidden');
+  }
+}
+
+// ─── Combination Analysis ────────────────────────────────────────────────────
+
+function analyzeCombinations(ads) {
+  // Generate 2-dim and 3-dim combos from format, setting, hook, gender, source, element
+  const comboDims = [
+    ['format', 'setting'],
+    ['format', 'hook'],
+    ['format', 'gender'],
+    ['format', 'element'],
+    ['setting', 'hook'],
+    ['setting', 'gender'],
+    ['format', 'setting', 'hook'],
+    ['format', 'setting', 'gender'],
+    ['format', 'hook', 'gender'],
+    ['format', 'gender', 'source'],
+  ];
+
+  const comboMap = {};
+
+  for (const dims of comboDims) {
+    for (const ad of ads) {
+      const vals = dims.map(d => ad.parsed[d]);
+      if (vals.some(v => !v)) continue; // skip if any dimension is null
+      const key = dims.map((d, i) => DIMENSION_LABELS[d] + ':' + vals[i]).join(' + ');
+      if (!comboMap[key]) comboMap[key] = { name: key, ads: 0, spend: 0, registrations: 0, leads: 0 };
+      const g = comboMap[key];
+      g.ads++;
+      g.spend += ad.spend;
+      g.registrations += ad.registrations;
+      g.leads += ad.leads;
+    }
+  }
+
+  // Compute derived and filter to 2+ regs
+  const combos = Object.values(comboMap)
+    .map(g => ({
+      ...g,
+      costPerReg: g.registrations > 0 ? g.spend / g.registrations : Infinity,
+      costPerLead: g.leads > 0 ? g.spend / g.leads : Infinity,
+    }))
+    .filter(g => g.registrations >= 2);
+
+  // Winners: lowest cost/reg
+  const winners = [...combos].sort((a, b) => a.costPerReg - b.costPerReg).slice(0, 10);
+  // Losers: highest cost/reg
+  const losers = [...combos].sort((a, b) => b.costPerReg - a.costPerReg).slice(0, 10);
+
+  renderComboTable('winnersBody', winners, 'winnersSection');
+  renderComboTable('losersBody', losers, 'losersSection');
+}
+
+function renderComboTable(tbodyId, combos, sectionId) {
+  if (combos.length === 0) {
+    document.getElementById(sectionId).classList.add('hidden');
+    return;
+  }
+  document.getElementById(sectionId).classList.remove('hidden');
+
+  document.getElementById(tbodyId).innerHTML = combos.map((g, i) => {
+    const isTop = sectionId === 'winnersSection';
+    const rank = i + 1;
+    const badge = isTop
+      ? (i < 3 ? `<span class="text-emerald-400 font-bold mr-1">#${rank}</span>` : `<span class="text-slate-500 mr-1">#${rank}</span>`)
+      : (i < 3 ? `<span class="text-red-400 font-bold mr-1">#${rank}</span>` : `<span class="text-slate-500 mr-1">#${rank}</span>`);
+
+    // Format combo name as chips
+    const chips = g.name.split(' + ').map(part => {
+      const [label, val] = part.split(':');
+      return `<span class="inline-flex items-center gap-1 bg-slate-800 rounded px-1.5 py-0.5 text-xs"><span class="text-slate-500">${label}:</span><span class="text-white">${val}</span></span>`;
+    }).join(' ');
+
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="py-2 px-3">${badge}<span class="inline-flex flex-wrap gap-1">${chips}</span></td>
+        <td class="py-2 px-3 text-right text-xs">${g.ads}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmt(g.spend)}</td>
+        <td class="py-2 px-3 text-right text-xs font-semibold text-emerald-400">${fmtNum(g.registrations)}</td>
+        <td class="py-2 px-3 text-right text-xs ${g.costPerReg < Infinity ? 'text-rose-400' : 'text-slate-500'}">${g.costPerReg < Infinity ? fmt(g.costPerReg) : '\u2014'}</td>
+        <td class="py-2 px-3 text-right text-xs font-semibold ${g.leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${g.leads > 0 ? fmtNum(g.leads) : '\u2014'}</td>
+        <td class="py-2 px-3 text-right text-xs ${g.costPerLead < Infinity ? 'text-pink-400' : 'text-slate-500'}">${g.costPerLead < Infinity ? fmt(g.costPerLead) : '\u2014'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ─── Campaign Dropdown ───────────────────────────────────────────────────────
+
+function populateCampaignDropdown(campaigns) {
+  const sel = document.getElementById('campaignSelect');
+  sel.innerHTML = '<option value="">All Campaigns</option>';
+  const withSpend = campaigns.filter(c => {
+    const ins = c.insights?.data?.[0];
+    return ins && Number(ins.spend || 0) > 0;
+  });
+  const sorted = [...withSpend].sort((a, b) => a.name.localeCompare(b.name));
+  for (const c of sorted) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  }
+  sel.value = selectedCampaignId || '';
+}
+
+function onCampaignSelect() {
+  selectedCampaignId = document.getElementById('campaignSelect').value;
+  loadData();
+}
+
+// ─── Main Load ───────────────────────────────────────────────────────────────
+
+async function loadData() {
+  const d = getDates();
+  const params = new URLSearchParams();
+  params.set('account_id', ACCOUNT_ID);
+  if (d.from) params.set('date_from', d.from);
+  if (d.to) params.set('date_to', d.to);
+  const q = '?' + params.toString();
+
+  // Show loading
+  document.getElementById('globalLoading').classList.remove('hidden');
+  document.getElementById('kpiSection').classList.add('hidden');
+  document.getElementById('dimensionsSection').classList.add('hidden');
+  document.getElementById('winnersSection').classList.add('hidden');
+  document.getElementById('losersSection').classList.add('hidden');
+  document.getElementById('errorMsg').classList.add('hidden');
+
+  try {
+    const [campaignsRes, creativesRes] = await Promise.all([
+      api('/api/ads/campaigns' + q),
+      api('/api/ads/creatives' + q),
+    ]);
+
+    // Populate campaign dropdown
+    populateCampaignDropdown(campaignsRes.data);
+
+    // Filter by selected campaign
+    let rawAds = creativesRes.data;
+    if (selectedCampaignId) {
+      const selName = campaignsRes.data.find(c => c.id === selectedCampaignId)?.name;
+      rawAds = rawAds.filter(ad => ad.campaign?.id === selectedCampaignId || ad.campaign?.name === selName);
+    }
+
+    // Detect events
+    scanForEvents(rawAds);
+
+    // Parse ads
+    const ads = parseAds(rawAds);
+
+    // Render
+    renderKPIs(ads);
+    renderDimensions(ads);
+    analyzeCombinations(ads);
+
+    document.getElementById('globalLoading').classList.add('hidden');
+  } catch (err) {
+    document.getElementById('globalLoading').classList.add('hidden');
+    document.getElementById('errorMsg').textContent = err.message;
+    document.getElementById('errorMsg').classList.remove('hidden');
+  }
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+setDefaultDates();
+loadData();
+</script>
+</body>
+</html>
