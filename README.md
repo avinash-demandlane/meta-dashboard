@@ -124,3 +124,4 @@ curl "http://localhost:3000/api/ads/insights/daily?date_from=2026-02-01&date_to=
 | actions | Conversions broken down by type (purchases, leads, etc.) |
 | cost_per_action | Cost per conversion by type |
 | purchase_roas | Return on ad spend for purchases |
+# meta-dashboard
