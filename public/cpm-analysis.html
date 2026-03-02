@@ -71,7 +71,15 @@
 
     <!-- Daily CPM Trend Chart -->
     <section id="trendSection" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
-      <h2 class="text-lg font-semibold text-white mb-1">Daily CPM Trend</h2>
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-lg font-semibold text-white">CPM Trend</h2>
+        <div class="flex items-center bg-slate-800 rounded-lg p-0.5">
+          <button id="btnDaily" onclick="setTrendMode('daily')"
+            class="text-xs font-medium px-3 py-1 rounded-md transition bg-blue-600 text-white">Daily</button>
+          <button id="btnWeekly" onclick="setTrendMode('weekly')"
+            class="text-xs font-medium px-3 py-1 rounded-md transition text-slate-400 hover:text-slate-200">Weekly</button>
+        </div>
+      </div>
       <p class="text-xs text-slate-500 mb-4">CPM (amber) &middot; Frequency (purple dashed) &middot; CTR (sky dotted)</p>
       <div style="height:320px; position:relative;"><canvas id="trendChart"></canvas></div>
     </section>
@@ -199,6 +207,7 @@ let detectedRegKey = null;
 
 let selectedCampaignId = '';
 let dailyData = [];       // cached daily insights for pre/post re-render
+let trendMode = 'daily';  // 'daily' or 'weekly'
 let trendChartInstance = null;
 let cpmCtrChartInstance = null;
 
@@ -312,16 +321,66 @@ function renderKPIs(daily) {
   document.getElementById('kpiSection').classList.remove('hidden');
 }
 
-// ─── Daily CPM Trend Chart ───────────────────────────────────────────────────
+// ─── Weekly Aggregation ──────────────────────────────────────────────────────
+
+function aggregateWeekly(daily) {
+  const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
+  const weeks = {};
+  for (const d of sorted) {
+    const dt = new Date(d.date_start);
+    const day = dt.getDay();
+    const monday = new Date(dt);
+    monday.setDate(dt.getDate() - ((day + 6) % 7));
+    const weekKey = monday.toISOString().split('T')[0];
+    if (!weeks[weekKey]) weeks[weekKey] = { spend: 0, impressions: 0, clicks: 0, freqWeighted: 0, freqImpr: 0 };
+    const w = weeks[weekKey];
+    w.spend += d.spend;
+    w.impressions += d.impressions;
+    w.clicks += d.clicks;
+    if (d.frequency > 0) {
+      w.freqWeighted += d.frequency * d.impressions;
+      w.freqImpr += d.impressions;
+    }
+  }
+  return Object.entries(weeks)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([week, w]) => ({
+      label: 'W/O ' + week,
+      cpm: w.impressions > 0 ? (w.spend / w.impressions) * 1000 : 0,
+      frequency: w.freqImpr > 0 ? w.freqWeighted / w.freqImpr : 0,
+      ctr: w.impressions > 0 ? (w.clicks / w.impressions) * 100 : 0,
+    }));
+}
+
+function setTrendMode(mode) {
+  trendMode = mode;
+  document.getElementById('btnDaily').className = 'text-xs font-medium px-3 py-1 rounded-md transition ' +
+    (mode === 'daily' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200');
+  document.getElementById('btnWeekly').className = 'text-xs font-medium px-3 py-1 rounded-md transition ' +
+    (mode === 'weekly' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200');
+  renderTrendChart(dailyData);
+}
+
+// ─── CPM Trend Chart ─────────────────────────────────────────────────────────
 
 function renderTrendChart(daily) {
   if (trendChartInstance) trendChartInstance.destroy();
 
-  const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
-  const labels = sorted.map(d => d.date_start);
-  const cpmData = sorted.map(d => d.cpm);
-  const freqData = sorted.map(d => d.frequency > 0 ? d.frequency : null);
-  const ctrData = sorted.map(d => d.ctr);
+  let labels, cpmData, freqData, ctrData;
+
+  if (trendMode === 'weekly') {
+    const weeks = aggregateWeekly(daily);
+    labels = weeks.map(w => w.label);
+    cpmData = weeks.map(w => w.cpm);
+    freqData = weeks.map(w => w.frequency > 0 ? w.frequency : null);
+    ctrData = weeks.map(w => w.ctr);
+  } else {
+    const sorted = [...daily].sort((a, b) => a.date_start.localeCompare(b.date_start));
+    labels = sorted.map(d => d.date_start);
+    cpmData = sorted.map(d => d.cpm);
+    freqData = sorted.map(d => d.frequency > 0 ? d.frequency : null);
+    ctrData = sorted.map(d => d.ctr);
+  }
 
   const ctx = document.getElementById('trendChart').getContext('2d');
   trendChartInstance = new Chart(ctx, {
