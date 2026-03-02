@@ -48,6 +48,9 @@ function formatInsightRow(row) {
     ...(row.gender && { gender: row.gender }),
     ...(row.publisher_platform && { platform: row.publisher_platform }),
     ...(row.device_platform && { device: row.device_platform }),
+    ...(row.hourly_stats_aggregated_by_advertiser_time_zone && {
+      hour: row.hourly_stats_aggregated_by_advertiser_time_zone,
+    }),
   };
 }
 
@@ -62,12 +65,12 @@ function formatInsights(response) {
 /**
  * Format currency value with symbol.
  */
-function formatCurrency(value, currency = "INR") {
-  return new Intl.NumberFormat("en-IN", {
+function formatCurrency(value, currency = "USD") {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
-  }).format(value / 100); // Meta returns amounts in smallest currency unit
+  }).format(value);
 }
 
 module.exports = { formatInsights, formatInsightRow, formatCurrency, flattenActions, flattenCostPerAction };

@@ -7,11 +7,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Validate required env vars
-const required = ["META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"];
-const missing = required.filter((k) => !process.env[k]);
-if (missing.length) {
-  console.warn(`\n⚠  Missing env vars: ${missing.join(", ")}`);
+if (!process.env.META_ACCESS_TOKEN) {
+  console.warn("\n⚠  Missing env var: META_ACCESS_TOKEN");
   console.warn("   Copy .env.example to .env and fill in your Meta credentials.\n");
+}
+if (!process.env.META_AD_ACCOUNT_IDS && !process.env.META_AD_ACCOUNT_ID) {
+  console.warn("\n⚠  Missing env var: META_AD_ACCOUNT_IDS (or META_AD_ACCOUNT_ID)");
+  console.warn("   Set at least one ad account ID in .env.\n");
 }
 
 app.use(cors());
@@ -26,10 +28,12 @@ app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     endpoints: [
-      "GET /api/ads/account",
-      "GET /api/ads/campaigns?date_from=&date_to=",
-      "GET /api/ads/insights?date_from=&date_to=&breakdown=age|gender|placement|device",
-      "GET /api/ads/insights/daily?date_from=&date_to=",
+      "GET /api/ads/accounts",
+      "GET /api/ads/account?account_id=",
+      "GET /api/ads/campaigns?account_id=&date_from=&date_to=",
+      "GET /api/ads/insights?account_id=&date_from=&date_to=&breakdown=age|gender|placement|device",
+      "GET /api/ads/insights/daily?account_id=&date_from=&date_to=",
+      "GET /api/ads/creatives?account_id=&date_from=&date_to=",
     ],
   });
 });

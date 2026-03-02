@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Meta Ads Dashboard</title>
+  <title>Creative Performance — Website Registrations & Leads</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script>
@@ -25,22 +25,42 @@
     .tab-active { background: #3b82f6; color: #fff; }
     .tab-inactive { background: #1e293b; color: #94a3b8; }
     .tab-inactive:hover { background: #334155; }
+    .filter-chip { transition: all 0.15s; }
+    .filter-chip:focus { outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,0.5); }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen">
 
   <!-- Header -->
   <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-bold text-white">Meta Ads Dashboard</h1>
-        <p id="accountName" class="text-sm text-slate-400">Loading...</p>
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-white">Creative Performance Dashboard</h1>
+          <p class="text-sm text-slate-400">Ad Account <span class="text-blue-400 font-mono">931494817519408</span> &middot; USD &middot; PST</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="date" id="dateFrom" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+          <span class="text-slate-500 text-sm">to</span>
+          <input type="date" id="dateTo" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
+          <button onclick="loadAll()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">Refresh</button>
+        </div>
       </div>
+      <!-- Campaign Dropdown + Keyword Filters -->
       <div class="flex items-center gap-2 flex-wrap">
-        <input type="date" id="dateFrom" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
-        <span class="text-slate-500 text-sm">to</span>
-        <input type="date" id="dateTo" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
-        <button onclick="loadAll()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">Refresh</button>
+        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">Campaign:</span>
+        <select id="campaignSelect" onchange="onCampaignSelect()"
+          class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 max-w-xs truncate">
+          <option value="">All Campaigns</option>
+        </select>
+        <span class="text-slate-700 mx-1">|</span>
+        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">Search:</span>
+        <input type="text" id="campaignFilter" placeholder="Campaign keyword..." oninput="applyFilters()"
+          class="filter-chip bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 w-40" />
+        <input type="text" id="adNameFilter" placeholder="Ad name keyword..." oninput="applyFilters()"
+          class="filter-chip bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 w-40" />
+        <button onclick="clearFilters()" class="text-xs text-slate-500 hover:text-slate-300 transition px-2 py-1">Clear</button>
+        <span id="filterStatus" class="text-xs text-slate-500 ml-auto"></span>
       </div>
     </div>
   </header>
@@ -49,17 +69,94 @@
 
     <!-- KPI Cards -->
     <section id="kpiSection">
-      <div id="kpiGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-        <!-- Filled by JS -->
+      <div id="kpiGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+      </div>
+    </section>
+
+    <!-- Creative Performance -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-white">Creative Performance <span class="text-sm font-normal text-emerald-400">(by Website Registrations & Leads)</span></h2>
+        <span id="creativesCount" class="text-xs text-slate-500"></span>
+      </div>
+      <div id="creativesLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
+      <div id="detectedEvent" class="mb-3 hidden flex flex-wrap gap-2">
+        <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full px-3 py-1">
+          Reg: <span id="detectedEventName" class="font-mono"></span>
+        </span>
+        <span id="detectedLeadBadge" class="text-xs bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full px-3 py-1 hidden">
+          Lead: <span id="detectedLeadName" class="font-mono"></span>
+        </span>
+      </div>
+      <div class="overflow-x-auto">
+        <table id="creativesTable" class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-2 px-3 font-medium">Creative</th>
+              <th class="text-left py-2 px-3 font-medium">Campaign</th>
+              <th class="text-left py-2 px-3 font-medium">Ad Set</th>
+              <th class="text-left py-2 px-3 font-medium">Status</th>
+              <th class="text-right py-2 px-3 font-medium">Spend</th>
+              <th class="text-right py-2 px-3 font-medium">Impr.</th>
+              <th class="text-right py-2 px-3 font-medium">Clicks</th>
+              <th class="text-right py-2 px-3 font-medium">CTR</th>
+              <th class="text-right py-2 px-3 font-medium">CPC</th>
+              <th class="text-right py-2 px-3 font-medium cursor-pointer hover:text-white" onclick="sortCreatives('cpm')">CPM</th>
+              <th class="text-right py-2 px-3 font-medium cursor-pointer hover:text-white" onclick="sortCreatives('registrations')">Regs. &#x25BC;</th>
+              <th class="text-right py-2 px-3 font-medium cursor-pointer hover:text-white" onclick="sortCreatives('costPerReg')">Cost/Reg</th>
+              <th class="text-right py-2 px-3 font-medium cursor-pointer hover:text-white" onclick="sortCreatives('leads')">Leads</th>
+              <th class="text-right py-2 px-3 font-medium cursor-pointer hover:text-white" onclick="sortCreatives('costPerLead')">Cost/Lead</th>
+            </tr>
+          </thead>
+          <tbody id="creativesBody" class="divide-y divide-slate-800/50">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Ad Naming Convention Analysis -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-2">Ad Naming Convention Breakdown</h2>
+      <p id="namingInfo" class="text-xs text-slate-500 mb-4"></p>
+      <div id="namingLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
+      <div id="namingTabs" class="flex gap-2 mb-4 flex-wrap"></div>
+      <div class="overflow-x-auto">
+        <table id="namingTable" class="w-full text-sm">
+          <thead id="namingHead" class="text-slate-400 border-b border-slate-800"></thead>
+          <tbody id="namingBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
       </div>
     </section>
 
     <!-- Daily Chart -->
     <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
-      <h2 class="text-lg font-semibold text-white mb-4">Daily Performance</h2>
+      <h2 class="text-lg font-semibold text-white mb-4">Daily Performance <span class="text-sm font-normal text-slate-400">(Spend + Registrations + Leads + Cost/Reg)</span></h2>
       <div class="relative" style="height: 320px;">
         <div id="chartLoading" class="absolute inset-0 flex items-center justify-center"><div class="spinner"></div></div>
         <canvas id="dailyChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Hourly Heatmap / Table -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <h2 class="text-lg font-semibold text-white mb-4">Hourly Performance <span class="text-sm font-normal text-slate-400">(PST)</span></h2>
+      <div id="hourlyLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
+      <div class="overflow-x-auto">
+        <table id="hourlyTable" class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-2 px-3 font-medium">Hour (PST)</th>
+              <th class="text-right py-2 px-3 font-medium">Spend</th>
+              <th class="text-right py-2 px-3 font-medium">Impr.</th>
+              <th class="text-right py-2 px-3 font-medium">Clicks</th>
+              <th class="text-right py-2 px-3 font-medium">Registrations</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
+              <th class="text-right py-2 px-3 font-medium">Leads</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
+            </tr>
+          </thead>
+          <tbody id="hourlyBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
       </div>
     </section>
 
@@ -75,17 +172,18 @@
       <div id="breakdownLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
       <div class="overflow-x-auto">
         <table id="breakdownTable" class="w-full text-sm">
-          <thead id="breakdownHead" class="text-slate-400 border-b border-slate-800">
-          </thead>
-          <tbody id="breakdownBody" class="divide-y divide-slate-800/50">
-          </tbody>
+          <thead id="breakdownHead" class="text-slate-400 border-b border-slate-800"></thead>
+          <tbody id="breakdownBody" class="divide-y divide-slate-800/50"></tbody>
         </table>
       </div>
     </section>
 
     <!-- Campaigns Table -->
     <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
-      <h2 class="text-lg font-semibold text-white mb-4">Campaigns</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-white">Campaigns</h2>
+        <span id="campaignsCount" class="text-xs text-slate-500"></span>
+      </div>
       <div id="campaignsLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
       <div class="overflow-x-auto">
         <table id="campaignsTable" class="w-full text-sm">
@@ -94,15 +192,45 @@
               <th class="text-left py-2 px-3 font-medium">Campaign</th>
               <th class="text-left py-2 px-3 font-medium">Status</th>
               <th class="text-right py-2 px-3 font-medium">Spend</th>
-              <th class="text-right py-2 px-3 font-medium">Impressions</th>
+              <th class="text-right py-2 px-3 font-medium">Impr.</th>
               <th class="text-right py-2 px-3 font-medium">Clicks</th>
               <th class="text-right py-2 px-3 font-medium">CTR</th>
-              <th class="text-right py-2 px-3 font-medium">CPC</th>
+              <th class="text-right py-2 px-3 font-medium">Regs.</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
               <th class="text-right py-2 px-3 font-medium">Leads</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
             </tr>
           </thead>
-          <tbody id="campaignsBody" class="divide-y divide-slate-800/50">
-          </tbody>
+          <tbody id="campaignsBody" class="divide-y divide-slate-800/50"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Adsets Table -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-white">Ad Sets</h2>
+        <span id="adsetsCount" class="text-xs text-slate-500"></span>
+      </div>
+      <div id="adsetsLoading" class="flex justify-center py-8 hidden"><div class="spinner"></div></div>
+      <div class="overflow-x-auto">
+        <table id="adsetsTable" class="w-full text-sm">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="text-left py-2 px-3 font-medium">Ad Set</th>
+              <th class="text-left py-2 px-3 font-medium">Campaign</th>
+              <th class="text-left py-2 px-3 font-medium">Status</th>
+              <th class="text-right py-2 px-3 font-medium">Spend</th>
+              <th class="text-right py-2 px-3 font-medium">Impr.</th>
+              <th class="text-right py-2 px-3 font-medium">Clicks</th>
+              <th class="text-right py-2 px-3 font-medium">CTR</th>
+              <th class="text-right py-2 px-3 font-medium">Regs.</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
+              <th class="text-right py-2 px-3 font-medium">Leads</th>
+              <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
+            </tr>
+          </thead>
+          <tbody id="adsetsBody" class="divide-y divide-slate-800/50"></tbody>
         </table>
       </div>
     </section>
@@ -110,39 +238,63 @@
   </main>
 
   <footer class="text-center py-6 text-xs text-slate-600">
-    Meta Ads Dashboard &middot; Data from Meta Marketing API v21.0
+    Creative Performance Dashboard &middot; Ad Account 931494817519408 &middot; Meta Marketing API v21.0
   </footer>
 
 <script>
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const ACCOUNT_ID = 'act_931494817519408';
+const CURRENCY = '$';
+
+// Custom event matching — will auto-detect the exact action_type at runtime
+const REGISTRATION_PATTERNS = [
+  'offsite_conversion.fb_pixel_custom.WebsiteRegistrationsCompleted',
+  'offsite_conversion.fb_pixel_custom.website_registrations_completed',
+  'offsite_conversion.fb_pixel_custom.Website registrations completed',
+  'website_registrations_completed',
+  'WebsiteRegistrationsCompleted',
+  'complete_registration',
+  'offsite_conversion.fb_pixel_complete_registration',
+];
+
+let detectedRegKey = null; // Will be set once we find the right action_type
+
+const LEAD_PATTERNS = [
+  'offsite_conversion.fb_pixel_custom.Website leads',
+  'offsite_conversion.fb_pixel_custom.WebsiteLeads',
+  'offsite_conversion.fb_pixel_custom.website_leads',
+  'lead',
+  'offsite_conversion.fb_pixel_lead',
+];
+
+let detectedLeadKey = null;
+
+// ─── State ───────────────────────────────────────────────────────────────────
+
+let allAds = [];          // Raw ads from API
+let allCampaigns = [];    // Raw campaigns from API
+let allAdsets = [];       // Raw adsets from API
+let parsedAds = [];       // Parsed/enriched ads
+let creativeSortField = 'registrations';
+let creativeSortDesc = true;
+let selectedCampaignId = ''; // '' = all campaigns
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n) {
   if (n == null || isNaN(n)) return '—';
-  if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + 'Cr';
-  if (n >= 1e5) return '₹' + (n / 1e5).toFixed(2) + 'L';
-  if (n >= 1e3) return '₹' + (n / 1e3).toFixed(1) + 'K';
-  return '₹' + n.toFixed(2);
+  return CURRENCY + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtNum(n) {
   if (n == null || isNaN(n)) return '—';
-  if (n >= 1e7) return (n / 1e7).toFixed(2) + 'Cr';
-  if (n >= 1e5) return (n / 1e5).toFixed(2) + 'L';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return n.toLocaleString('en-IN');
+  return Number(n).toLocaleString('en-US');
 }
 
 function fmtPct(n) {
   if (n == null || isNaN(n)) return '—';
-  return n.toFixed(2) + '%';
-}
-
-function getLeads(row) {
-  return row.actions?.lead || row.actions?.onsite_web_lead || 0;
-}
-
-function getCPL(row) {
-  return row.cost_per_action?.lead || row.cost_per_action?.onsite_web_lead || 0;
+  return Number(n).toFixed(2) + '%';
 }
 
 function getDates() {
@@ -152,11 +304,17 @@ function getDates() {
   };
 }
 
-function qs(d) {
+function qs(d, includeCampaign) {
   const p = new URLSearchParams();
+  p.set('account_id', ACCOUNT_ID);
   if (d.from) p.set('date_from', d.from);
   if (d.to) p.set('date_to', d.to);
-  return p.toString() ? '?' + p.toString() : '';
+  if (includeCampaign && selectedCampaignId) p.set('campaign_ids', selectedCampaignId);
+  return '?' + p.toString();
+}
+
+function accountQs() {
+  return '?account_id=' + encodeURIComponent(ACCOUNT_ID);
 }
 
 async function api(path) {
@@ -166,21 +324,232 @@ async function api(path) {
   return json;
 }
 
-// ─── Default dates (last 30 days) ───────────────────────────────────────────
+// ─── Custom Event Detection ──────────────────────────────────────────────────
+
+function flattenActionsRaw(actions) {
+  if (!Array.isArray(actions)) return {};
+  const out = {};
+  for (const a of actions) {
+    out[a.action_type] = Number(a.value);
+  }
+  return out;
+}
+
+function flattenCostRaw(costPer) {
+  if (!Array.isArray(costPer)) return {};
+  const out = {};
+  for (const a of costPer) {
+    out[a.action_type] = Number(a.value);
+  }
+  return out;
+}
+
+function detectRegistrationKey(actionsObj) {
+  if (detectedRegKey && actionsObj[detectedRegKey] !== undefined) return detectedRegKey;
+
+  // Try exact pattern matches first
+  for (const pattern of REGISTRATION_PATTERNS) {
+    if (actionsObj[pattern] !== undefined) {
+      detectedRegKey = pattern;
+      return pattern;
+    }
+  }
+
+  // Fuzzy match: any key containing 'registration'
+  for (const key of Object.keys(actionsObj)) {
+    if (key.toLowerCase().includes('registration')) {
+      detectedRegKey = key;
+      return key;
+    }
+  }
+
+  return null;
+}
+
+function getRegistrations(actionsObj) {
+  if (!actionsObj || typeof actionsObj !== 'object') return 0;
+  const key = detectRegistrationKey(actionsObj);
+  return key ? (actionsObj[key] || 0) : 0;
+}
+
+function getCostPerReg(costPerObj) {
+  if (!costPerObj || typeof costPerObj !== 'object' || !detectedRegKey) return 0;
+  return costPerObj[detectedRegKey] || 0;
+}
+
+// Scan all ads to detect the registration event key upfront
+function scanForRegistrationEvent(ads) {
+  for (const ad of ads) {
+    const ins = ad.insights?.data?.[0];
+    if (!ins) continue;
+    const actions = flattenActionsRaw(ins.actions);
+    const key = detectRegistrationKey(actions);
+    if (key) {
+      const el = document.getElementById('detectedEvent');
+      el.classList.remove('hidden');
+      document.getElementById('detectedEventName').textContent = key;
+      return key;
+    }
+  }
+
+  // Also scan from insights-level data
+  return null;
+}
+
+// ─── Lead Event Detection ─────────────────────────────────────────────────
+
+function detectLeadKey(actionsObj) {
+  if (detectedLeadKey && actionsObj[detectedLeadKey] !== undefined) return detectedLeadKey;
+
+  for (const pattern of LEAD_PATTERNS) {
+    if (actionsObj[pattern] !== undefined) {
+      detectedLeadKey = pattern;
+      return pattern;
+    }
+  }
+
+  for (const key of Object.keys(actionsObj)) {
+    if (key.toLowerCase().includes('lead')) {
+      detectedLeadKey = key;
+      return key;
+    }
+  }
+
+  return null;
+}
+
+function getLeads(actionsObj) {
+  if (!actionsObj || typeof actionsObj !== 'object') return 0;
+  const key = detectLeadKey(actionsObj);
+  return key ? (actionsObj[key] || 0) : 0;
+}
+
+function getCostPerLead(costPerObj) {
+  if (!costPerObj || typeof costPerObj !== 'object' || !detectedLeadKey) return 0;
+  return costPerObj[detectedLeadKey] || 0;
+}
+
+function scanForLeadEvent(ads) {
+  for (const ad of ads) {
+    const ins = ad.insights?.data?.[0];
+    if (!ins) continue;
+    const actions = flattenActionsRaw(ins.actions);
+    const key = detectLeadKey(actions);
+    if (key) {
+      const badge = document.getElementById('detectedLeadBadge');
+      badge.classList.remove('hidden');
+      document.getElementById('detectedLeadName').textContent = key;
+      return key;
+    }
+  }
+  return null;
+}
+
+// ─── Default dates (last 7 days) ────────────────────────────────────────────
 
 function setDefaultDates() {
   const today = new Date();
-  const from = new Date(today.getTime() - 30 * 86400000);
+  const from = new Date(today.getTime() - 7 * 86400000);
   document.getElementById('dateTo').value = today.toISOString().split('T')[0];
   document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
 }
 
-// ─── KPI Cards ──────────────────────────────────────────────────────────────
+// ─── Keyword Filters ─────────────────────────────────────────────────────────
+
+function getCampaignKeyword() {
+  return (document.getElementById('campaignFilter').value || '').toLowerCase().trim();
+}
+
+function getAdNameKeyword() {
+  return (document.getElementById('adNameFilter').value || '').toLowerCase().trim();
+}
+
+function clearFilters() {
+  document.getElementById('campaignFilter').value = '';
+  document.getElementById('adNameFilter').value = '';
+  document.getElementById('campaignSelect').value = '';
+  selectedCampaignId = '';
+  loadAll();
+}
+
+function populateCampaignDropdown(campaigns) {
+  const sel = document.getElementById('campaignSelect');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All Campaigns</option>';
+  // Only show campaigns with spend > 0
+  const withSpend = campaigns.filter(c => {
+    const ins = c.insights?.data?.[0];
+    return ins && Number(ins.spend || 0) > 0;
+  });
+  const sorted = [...withSpend].sort((a, b) => a.name.localeCompare(b.name));
+  for (const c of sorted) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  }
+  sel.value = prev || '';
+}
+
+function onCampaignSelect() {
+  selectedCampaignId = document.getElementById('campaignSelect').value;
+  loadAll();
+}
+
+function applyFilters() {
+  const ck = getCampaignKeyword();
+  const nk = getAdNameKeyword();
+
+  // Filter and re-render creatives
+  const filtered = filterAds(parsedAds, ck, nk);
+  renderCreativesTable(filtered);
+
+  // Filter and re-render campaigns
+  const filteredCampaigns = filterCampaigns(allCampaigns, ck);
+  renderCampaigns(filteredCampaigns);
+
+  // Filter and re-render adsets
+  const filteredAdsets = filterAdsets(allAdsets, ck);
+  renderAdsets(filteredAdsets);
+
+  // Update filter status
+  const parts = [];
+  if (ck) parts.push('campaign: "' + ck + '"');
+  if (nk) parts.push('ad name: "' + nk + '"');
+  document.getElementById('filterStatus').textContent = parts.length > 0
+    ? 'Filtering by ' + parts.join(', ')
+    : '';
+}
+
+function filterAds(ads, campaignKw, adNameKw) {
+  return ads.filter(ad => {
+    if (campaignKw && !ad.campaignName.toLowerCase().includes(campaignKw)) return false;
+    if (adNameKw && !ad.name.toLowerCase().includes(adNameKw)) return false;
+    return true;
+  });
+}
+
+function filterCampaigns(campaigns, campaignKw) {
+  if (!campaignKw) return campaigns;
+  return campaigns.filter(c => c.name.toLowerCase().includes(campaignKw));
+}
+
+function filterAdsets(adsets, campaignKw) {
+  if (!campaignKw) return adsets;
+  return adsets.filter(a => {
+    const cName = (a.campaign?.name || '').toLowerCase();
+    return cName.includes(campaignKw);
+  });
+}
+
+// ─── KPI Cards ───────────────────────────────────────────────────────────────
 
 function renderKPI(data) {
   const row = data[0] || {};
-  const leads = getLeads(row);
-  const cpl = getCPL(row);
+  const regs = getRegistrations(row.actions);
+  const costReg = getCostPerReg(row.cost_per_action);
+  const leads = getLeads(row.actions);
+  const costLead = getCostPerLead(row.cost_per_action);
 
   const cards = [
     { label: 'Spend', value: fmt(row.spend), color: 'blue' },
@@ -189,8 +558,10 @@ function renderKPI(data) {
     { label: 'CTR', value: fmtPct(row.ctr), color: 'green' },
     { label: 'CPC', value: fmt(row.cpc), color: 'amber' },
     { label: 'CPM', value: fmt(row.cpm), color: 'orange' },
-    { label: 'Leads', value: fmtNum(leads), color: 'emerald' },
-    { label: 'Cost/Lead', value: fmt(cpl), color: 'rose' },
+    { label: 'Registrations', value: fmtNum(regs), color: 'emerald' },
+    { label: 'Cost/Reg', value: costReg > 0 ? fmt(costReg) : '—', color: 'rose' },
+    { label: 'Leads', value: fmtNum(leads), color: 'sky' },
+    { label: 'Cost/Lead', value: costLead > 0 ? fmt(costLead) : '—', color: 'pink' },
   ];
 
   const colorMap = {
@@ -202,10 +573,11 @@ function renderKPI(data) {
     orange: 'border-orange-500/30 bg-orange-500/5',
     emerald: 'border-emerald-500/30 bg-emerald-500/5',
     rose: 'border-rose-500/30 bg-rose-500/5',
+    sky: 'border-sky-500/30 bg-sky-500/5',
+    pink: 'border-pink-500/30 bg-pink-500/5',
   };
 
-  const grid = document.getElementById('kpiGrid');
-  grid.innerHTML = cards.map(c => `
+  document.getElementById('kpiGrid').innerHTML = cards.map(c => `
     <div class="border rounded-xl p-3 sm:p-4 ${colorMap[c.color]}">
       <p class="text-xs text-slate-400 font-medium mb-1">${c.label}</p>
       <p class="text-lg sm:text-xl font-bold text-white">${c.value}</p>
@@ -213,7 +585,310 @@ function renderKPI(data) {
   `).join('');
 }
 
-// ─── Daily Chart ────────────────────────────────────────────────────────────
+// ─── Creative Performance Table ──────────────────────────────────────────────
+
+function parseAds(ads) {
+  return ads.map(ad => {
+    const creative = ad.adcreatives?.data?.[0] || {};
+    const ins = ad.insights?.data?.[0] || {};
+    const actions = flattenActionsRaw(ins.actions);
+    const costPer = flattenCostRaw(ins.cost_per_action_type);
+    const regs = getRegistrations(actions);
+    const costReg = getCostPerReg(costPer);
+    const leads = getLeads(actions);
+    const costPerLead = getCostPerLead(costPer);
+
+    return {
+      id: ad.id,
+      name: ad.name || '—',
+      status: ad.status || 'UNKNOWN',
+      campaignName: ad.campaign?.name || '—',
+      adsetName: ad.adset?.name || '—',
+      thumbnail: creative.thumbnail_url || '',
+      title: creative.title || '',
+      body: creative.body || '',
+      cta: creative.call_to_action_type || '',
+      spend: Number(ins.spend || 0),
+      impressions: Number(ins.impressions || 0),
+      clicks: Number(ins.clicks || 0),
+      ctr: Number(ins.ctr || 0),
+      cpc: Number(ins.cpc || 0),
+      cpm: Number(ins.cpm || 0),
+      registrations: regs,
+      costPerReg: costReg,
+      leads: leads,
+      costPerLead: costPerLead,
+      allActions: actions,
+    };
+  });
+}
+
+function sortCreatives(field) {
+  if (creativeSortField === field) {
+    creativeSortDesc = !creativeSortDesc;
+  } else {
+    creativeSortField = field;
+    creativeSortDesc = true;
+  }
+  applyFilters();
+}
+
+function renderCreativesTable(ads) {
+  // Sort
+  const sorted = [...ads].sort((a, b) => {
+    const va = a[creativeSortField] || 0;
+    const vb = b[creativeSortField] || 0;
+    return creativeSortDesc ? vb - va : va - vb;
+  });
+
+  document.getElementById('creativesCount').textContent = sorted.length + ' of ' + parsedAds.length + ' ads';
+
+  const statusBadge = (s) => {
+    const colors = {
+      ACTIVE: 'bg-green-500/20 text-green-400',
+      PAUSED: 'bg-amber-500/20 text-amber-400',
+      DELETED: 'bg-red-500/20 text-red-400',
+      ARCHIVED: 'bg-slate-500/20 text-slate-400',
+    };
+    const cls = colors[s] || 'bg-slate-500/20 text-slate-400';
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${s}</span>`;
+  };
+
+  if (sorted.length === 0) {
+    document.getElementById('creativesBody').innerHTML =
+      '<tr><td colspan="14" class="text-center py-8 text-slate-400">No ads match the current filters.</td></tr>';
+    return;
+  }
+
+  // Find best performer (lowest cost/reg among ads with regs > 0)
+  let bestIdx = -1;
+  let minCostReg = Infinity;
+  sorted.forEach((ad, i) => {
+    if (ad.registrations > 0 && ad.costPerReg > 0 && ad.costPerReg < minCostReg) {
+      minCostReg = ad.costPerReg;
+      bestIdx = i;
+    }
+  });
+
+  // Find best/worst CPM (lowest = best, highest = worst) among ads with impressions
+  const adsWithCpm = sorted.filter(ad => ad.impressions > 0 && ad.cpm > 0);
+  let bestCpm = Infinity, worstCpm = 0;
+  adsWithCpm.forEach(ad => {
+    if (ad.cpm < bestCpm) bestCpm = ad.cpm;
+    if (ad.cpm > worstCpm) worstCpm = ad.cpm;
+  });
+
+  document.getElementById('creativesBody').innerHTML = sorted.map((ad, i) => {
+    const isBest = i === bestIdx;
+    const bestBadge = isBest ? ' <span class="text-amber-300 text-xs font-bold">&#9733;</span>' : '';
+    const rowClass = isBest ? 'bg-amber-500/5' : '';
+
+    let cpmClass = 'text-slate-500';
+    if (ad.cpm > 0 && adsWithCpm.length > 1) {
+      if (ad.cpm === bestCpm) cpmClass = 'text-green-400';
+      else if (ad.cpm === worstCpm) cpmClass = 'text-red-400';
+    }
+
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowClass}">
+        <td class="py-2 px-3">
+          <div class="flex items-center gap-2">
+            ${ad.thumbnail
+              ? `<img src="${ad.thumbnail}" alt="" loading="lazy" class="w-10 h-10 rounded object-cover bg-slate-700 flex-shrink-0" />`
+              : '<div class="w-10 h-10 rounded bg-slate-700 flex-shrink-0"></div>'
+            }
+            <div class="min-w-0">
+              <p class="text-white font-medium text-xs truncate max-w-[200px]" title="${ad.name}">${ad.name}${bestBadge}</p>
+              ${ad.title ? `<p class="text-slate-500 text-xs truncate max-w-[200px]">${ad.title}</p>` : ''}
+            </div>
+          </div>
+        </td>
+        <td class="py-2 px-3 text-xs text-slate-400 max-w-[120px] truncate" title="${ad.campaignName}">${ad.campaignName}</td>
+        <td class="py-2 px-3 text-xs text-slate-400 max-w-[120px] truncate" title="${ad.adsetName}">${ad.adsetName}</td>
+        <td class="py-2 px-3">${statusBadge(ad.status)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmt(ad.spend)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmtNum(ad.impressions)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmtNum(ad.clicks)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmtPct(ad.ctr)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmt(ad.cpc)}</td>
+        <td class="py-2 px-3 text-right text-xs ${cpmClass}">${ad.cpm > 0 ? fmt(ad.cpm) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs font-semibold ${ad.registrations > 0 ? 'text-emerald-400' : 'text-slate-500'}">${ad.registrations > 0 ? fmtNum(ad.registrations) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs ${ad.costPerReg > 0 ? 'text-rose-400' : 'text-slate-500'}">${ad.costPerReg > 0 ? fmt(ad.costPerReg) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs font-semibold ${ad.leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${ad.leads > 0 ? fmtNum(ad.leads) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs ${ad.costPerLead > 0 ? 'text-pink-400' : 'text-slate-500'}">${ad.costPerLead > 0 ? fmt(ad.costPerLead) : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ─── Ad Naming Convention Analysis ───────────────────────────────────────────
+
+let currentNamingDimension = 'format';
+
+// Extract structured dimensions from ad names like:
+// "spokesperson_living_room_female_old_black_v2"
+// "FMT_Spokesperson_ANG_Over55_F_LivingRoom"
+// "skit_outdoor_male"
+// "podcast_studio_male_young"
+// "Static Ad_2 – Copy"
+function parseAdName(name) {
+  const lower = name.toLowerCase();
+
+  // Format / type — first meaningful token
+  let format = 'other';
+  if (lower.startsWith('spokesperson') || lower.includes('_spokesperson_')) format = 'spokesperson';
+  else if (lower.startsWith('fmt_spokesperson') || lower.startsWith('fmt_')) format = 'fmt_spokesperson';
+  else if (lower.startsWith('skit')) format = 'skit';
+  else if (lower.startsWith('podcast')) format = 'podcast';
+  else if (lower.startsWith('static')) format = 'static';
+  else if (lower.startsWith('ad ') || lower === 'ad 1') format = 'generic_ad';
+
+  // Setting / location
+  let setting = 'unknown';
+  if (lower.includes('living_room') || lower.includes('livingroom')) setting = 'living_room';
+  else if (lower.includes('outdoor')) setting = 'outdoor';
+  else if (lower.includes('studio')) setting = 'studio';
+  else if (lower.includes('indoor') || lower.includes('baby-indoor')) setting = 'indoor';
+  else if (lower.includes('car')) setting = 'car';
+
+  // Gender
+  let gender = 'unknown';
+  if (lower.includes('female') || lower.includes('_f_') || /_f$/.test(lower)) gender = 'female';
+  else if (lower.includes('male') && !lower.includes('female')) gender = 'male';
+
+  // Age indicator
+  let age = 'unknown';
+  if (lower.includes('young') || lower.includes('youn')) age = 'young';
+  else if (lower.includes('old') || lower.includes('over5')) age = 'older';
+
+  // Ethnicity / appearance (if encoded)
+  let appearance = 'unknown';
+  if (lower.includes('white')) appearance = 'white';
+  else if (lower.includes('black') || lower.includes('bla')) appearance = 'black';
+  else if (lower.includes('asian') || lower.includes('ang')) appearance = 'ang';
+
+  return { format, setting, gender, age, appearance };
+}
+
+function analyzeNamingConvention(ads) {
+  if (ads.length === 0) {
+    document.getElementById('namingInfo').textContent = 'No ads to analyze.';
+    return;
+  }
+
+  // Parse all ad names
+  const enriched = ads.map(ad => ({
+    ...ad,
+    parsed: parseAdName(ad.name),
+  }));
+
+  // Identify which dimensions have variety (more than 1 unique value excluding 'unknown')
+  const dimensions = ['format', 'setting', 'gender', 'age', 'appearance'];
+  const dimensionLabels = {
+    format: 'Ad Format',
+    setting: 'Setting/Location',
+    gender: 'Gender',
+    age: 'Age Group',
+    appearance: 'Appearance',
+  };
+
+  const activeDimensions = dimensions.filter(dim => {
+    const values = new Set(enriched.map(a => a.parsed[dim]).filter(v => v !== 'unknown'));
+    return values.size >= 2;
+  });
+
+  if (activeDimensions.length === 0) {
+    document.getElementById('namingInfo').textContent = 'Could not extract meaningful dimensions from ad names.';
+    document.getElementById('namingTabs').innerHTML = '';
+    document.getElementById('namingHead').innerHTML = '';
+    document.getElementById('namingBody').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('namingInfo').textContent =
+    `Parsed ${ads.length} ad names. Extracted ${activeDimensions.length} dimensions: ${activeDimensions.map(d => dimensionLabels[d]).join(', ')}.`;
+
+  // Ensure current dimension is valid
+  if (!activeDimensions.includes(currentNamingDimension)) {
+    currentNamingDimension = activeDimensions[0];
+  }
+
+  // Render tabs
+  document.getElementById('namingTabs').innerHTML = activeDimensions.map(dim => {
+    const cls = dim === currentNamingDimension ? 'tab-active' : 'tab-inactive';
+    return `<button onclick="switchNamingDimension('${dim}')" class="${cls} px-4 py-1.5 rounded-lg text-sm font-medium transition">${dimensionLabels[dim]}</button>`;
+  }).join('');
+
+  // Render breakdown
+  renderNamingBreakdown(enriched, currentNamingDimension);
+}
+
+function switchNamingDimension(dim) {
+  currentNamingDimension = dim;
+  const ck = getCampaignKeyword();
+  const nk = getAdNameKeyword();
+  const filtered = filterAds(parsedAds, ck, nk);
+  analyzeNamingConvention(filtered);
+}
+
+function renderNamingBreakdown(enrichedAds, dimension) {
+  // Group by dimension value
+  const groups = {};
+  for (const ad of enrichedAds) {
+    const key = ad.parsed[dimension] || 'unknown';
+    if (!groups[key]) {
+      groups[key] = { name: key, spend: 0, impressions: 0, clicks: 0, registrations: 0, leads: 0, costPerReg: 0, costPerLead: 0, ads: 0 };
+    }
+    groups[key].spend += ad.spend;
+    groups[key].impressions += ad.impressions;
+    groups[key].clicks += ad.clicks;
+    groups[key].registrations += ad.registrations;
+    groups[key].leads += ad.leads;
+    groups[key].ads += 1;
+  }
+
+  // Calculate cost/reg and cost/lead for each group
+  Object.values(groups).forEach(g => {
+    g.costPerReg = g.registrations > 0 ? g.spend / g.registrations : 0;
+    g.costPerLead = g.leads > 0 ? g.spend / g.leads : 0;
+    g.ctr = g.impressions > 0 ? (g.clicks / g.impressions) * 100 : 0;
+  });
+
+  const sorted = Object.values(groups).sort((a, b) => b.registrations - a.registrations || b.spend - a.spend);
+
+  const dimLabel = { format: 'Ad Format', setting: 'Setting', gender: 'Gender', age: 'Age Group', appearance: 'Appearance' }[dimension] || dimension;
+  document.getElementById('namingHead').innerHTML = `
+    <tr>
+      <th class="text-left py-2 px-3 font-medium">${dimLabel}</th>
+      <th class="text-right py-2 px-3 font-medium">Ads</th>
+      <th class="text-right py-2 px-3 font-medium">Spend</th>
+      <th class="text-right py-2 px-3 font-medium">Impr.</th>
+      <th class="text-right py-2 px-3 font-medium">Clicks</th>
+      <th class="text-right py-2 px-3 font-medium">CTR</th>
+      <th class="text-right py-2 px-3 font-medium">Regs.</th>
+      <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
+      <th class="text-right py-2 px-3 font-medium">Leads</th>
+      <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
+    </tr>
+  `;
+
+  document.getElementById('namingBody').innerHTML = sorted.map(g => `
+    <tr class="hover:bg-slate-800/50">
+      <td class="py-2 px-3 text-white font-medium">${g.name}</td>
+      <td class="py-2 px-3 text-right text-xs">${g.ads}</td>
+      <td class="py-2 px-3 text-right text-xs">${fmt(g.spend)}</td>
+      <td class="py-2 px-3 text-right text-xs">${fmtNum(g.impressions)}</td>
+      <td class="py-2 px-3 text-right text-xs">${fmtNum(g.clicks)}</td>
+      <td class="py-2 px-3 text-right text-xs">${fmtPct(g.ctr)}</td>
+      <td class="py-2 px-3 text-right text-xs font-semibold ${g.registrations > 0 ? 'text-emerald-400' : 'text-slate-500'}">${g.registrations > 0 ? fmtNum(g.registrations) : '—'}</td>
+      <td class="py-2 px-3 text-right text-xs ${g.costPerReg > 0 ? 'text-rose-400' : 'text-slate-500'}">${g.costPerReg > 0 ? fmt(g.costPerReg) : '—'}</td>
+      <td class="py-2 px-3 text-right text-xs font-semibold ${g.leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${g.leads > 0 ? fmtNum(g.leads) : '—'}</td>
+      <td class="py-2 px-3 text-right text-xs ${g.costPerLead > 0 ? 'text-pink-400' : 'text-slate-500'}">${g.costPerLead > 0 ? fmt(g.costPerLead) : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+// ─── Daily Chart ─────────────────────────────────────────────────────────────
 
 let dailyChart = null;
 
@@ -222,10 +897,16 @@ function renderDailyChart(data) {
 
   const labels = data.map(d => {
     const dt = new Date(d.date_start);
-    return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    return dt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', weekday: 'short' });
   });
-  const spendData = data.map(d => d.spend);
-  const clicksData = data.map(d => d.clicks);
+  const spendData = data.map(d => Number(d.spend || 0));
+  const regsData = data.map(d => getRegistrations(d.actions));
+  const leadsData = data.map(d => getLeads(d.actions));
+  const costPerRegData = data.map(d => {
+    const regs = getRegistrations(d.actions);
+    const spend = Number(d.spend || 0);
+    return regs > 0 ? spend / regs : null;
+  });
 
   if (dailyChart) dailyChart.destroy();
 
@@ -236,26 +917,57 @@ function renderDailyChart(data) {
       labels,
       datasets: [
         {
-          label: 'Spend (₹)',
+          label: 'Spend ($)',
           data: spendData,
           backgroundColor: 'rgba(59, 130, 246, 0.3)',
           borderColor: 'rgba(59, 130, 246, 0.8)',
           borderWidth: 1,
           borderRadius: 4,
           yAxisID: 'y',
-          order: 2,
+          order: 3,
         },
         {
-          label: 'Clicks',
-          data: clicksData,
-          borderColor: 'rgba(6, 182, 212, 0.9)',
-          backgroundColor: 'rgba(6, 182, 212, 0.1)',
+          label: 'Registrations',
+          data: regsData,
+          borderColor: 'rgba(16, 185, 129, 0.9)',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
           borderWidth: 2,
-          pointRadius: 2,
+          pointRadius: 4,
+          pointBackgroundColor: 'rgba(16, 185, 129, 1)',
           tension: 0.3,
           type: 'line',
           yAxisID: 'y1',
           order: 1,
+        },
+        {
+          label: 'Leads',
+          data: leadsData,
+          borderColor: 'rgba(56, 189, 248, 0.9)',
+          backgroundColor: 'rgba(56, 189, 248, 0.1)',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          pointRadius: 4,
+          pointBackgroundColor: 'rgba(56, 189, 248, 1)',
+          tension: 0.3,
+          type: 'line',
+          yAxisID: 'y1',
+          order: 2,
+        },
+        {
+          label: 'Cost/Reg',
+          data: costPerRegData,
+          borderColor: 'rgba(251, 113, 133, 0.9)',
+          backgroundColor: 'rgba(251, 113, 133, 0.1)',
+          borderWidth: 2,
+          borderDash: [2, 3],
+          pointRadius: 4,
+          pointStyle: 'rectRot',
+          pointBackgroundColor: 'rgba(251, 113, 133, 1)',
+          tension: 0.3,
+          type: 'line',
+          yAxisID: 'y2',
+          spanGaps: true,
+          order: 0,
         },
       ],
     },
@@ -273,8 +985,10 @@ function renderDailyChart(data) {
           bodyColor: '#cbd5e1',
           callbacks: {
             label: function(ctx) {
-              if (ctx.dataset.yAxisID === 'y') return 'Spend: ₹' + ctx.parsed.y.toLocaleString('en-IN');
-              return 'Clicks: ' + ctx.parsed.y.toLocaleString('en-IN');
+              if (ctx.dataset.label === 'Cost/Reg') return ctx.parsed.y != null ? 'Cost/Reg: $' + ctx.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '';
+              if (ctx.dataset.yAxisID === 'y') return 'Spend: $' + ctx.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 });
+              if (ctx.dataset.label === 'Leads') return 'Leads: ' + ctx.parsed.y.toLocaleString('en-US');
+              return 'Registrations: ' + ctx.parsed.y.toLocaleString('en-US');
             },
           },
         },
@@ -289,13 +1003,22 @@ function renderDailyChart(data) {
           ticks: {
             color: '#60a5fa',
             font: { size: 11 },
-            callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(0) + 'K' : v),
+            callback: v => '$' + v.toLocaleString('en-US'),
           },
           grid: { color: 'rgba(51, 65, 85, 0.3)' },
         },
         y1: {
           position: 'right',
-          ticks: { color: '#22d3ee', font: { size: 11 } },
+          ticks: { color: '#10b981', font: { size: 11 }, stepSize: 1 },
+          grid: { display: false },
+        },
+        y2: {
+          position: 'right',
+          ticks: {
+            color: '#fb7185',
+            font: { size: 11 },
+            callback: v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0 }),
+          },
           grid: { display: false },
         },
       },
@@ -303,14 +1026,67 @@ function renderDailyChart(data) {
   });
 }
 
-// ─── Breakdown Tables ───────────────────────────────────────────────────────
+// ─── Hourly Performance ──────────────────────────────────────────────────────
+
+function renderHourly(data) {
+  // Aggregate by hour across all days
+  const hourMap = {};
+  for (const row of data) {
+    const hourStr = row.hour || '';
+    // Format: "00:00:00 - 00:59:59" → extract start hour
+    const match = hourStr.match(/^(\d{2}):/);
+    const hourKey = match ? match[1] + ':00' : hourStr;
+
+    if (!hourMap[hourKey]) {
+      hourMap[hourKey] = { hour: hourKey, spend: 0, impressions: 0, clicks: 0, registrations: 0, leads: 0 };
+    }
+    hourMap[hourKey].spend += row.spend;
+    hourMap[hourKey].impressions += row.impressions;
+    hourMap[hourKey].clicks += row.clicks;
+    hourMap[hourKey].registrations += getRegistrations(row.actions);
+    hourMap[hourKey].leads += getLeads(row.actions);
+  }
+
+  const sorted = Object.values(hourMap).sort((a, b) => a.hour.localeCompare(b.hour));
+
+  // Find peak hour for registrations
+  let peakRegs = 0;
+  sorted.forEach(h => { if (h.registrations > peakRegs) peakRegs = h.registrations; });
+
+  document.getElementById('hourlyBody').innerHTML = sorted.map(h => {
+    const costReg = h.registrations > 0 ? h.spend / h.registrations : 0;
+    const costLead = h.leads > 0 ? h.spend / h.leads : 0;
+    const isPeak = h.registrations === peakRegs && peakRegs > 0;
+    const rowClass = isPeak ? 'bg-emerald-500/5' : '';
+    const peakBadge = isPeak ? ' <span class="text-emerald-400 text-xs">&#9650; peak</span>' : '';
+
+    return `
+      <tr class="hover:bg-slate-800/50 ${rowClass}">
+        <td class="py-2 px-3 text-white font-medium font-mono text-xs">${h.hour}${peakBadge}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmt(h.spend)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmtNum(h.impressions)}</td>
+        <td class="py-2 px-3 text-right text-xs">${fmtNum(h.clicks)}</td>
+        <td class="py-2 px-3 text-right text-xs font-semibold ${h.registrations > 0 ? 'text-emerald-400' : 'text-slate-500'}">${h.registrations > 0 ? fmtNum(h.registrations) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs ${costReg > 0 ? 'text-rose-400' : 'text-slate-500'}">${costReg > 0 ? fmt(costReg) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs font-semibold ${h.leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${h.leads > 0 ? fmtNum(h.leads) : '—'}</td>
+        <td class="py-2 px-3 text-right text-xs ${costLead > 0 ? 'text-pink-400' : 'text-slate-500'}">${costLead > 0 ? fmt(costLead) : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  if (sorted.length === 0) {
+    document.getElementById('hourlyBody').innerHTML =
+      '<tr><td colspan="8" class="text-center py-8 text-slate-400">No hourly data available.</td></tr>';
+  }
+}
+
+// ─── Breakdown Tables ────────────────────────────────────────────────────────
 
 let currentTab = 'age';
 
 function loadBreakdown(type) {
   currentTab = type;
 
-  // Update tab styles
   document.querySelectorAll('[data-tab]').forEach(btn => {
     btn.className = btn.dataset.tab === type
       ? 'tab-active px-4 py-1.5 rounded-lg text-sm font-medium transition'
@@ -319,9 +1095,11 @@ function loadBreakdown(type) {
 
   const d = getDates();
   const params = new URLSearchParams();
+  params.set('account_id', ACCOUNT_ID);
   if (d.from) params.set('date_from', d.from);
   if (d.to) params.set('date_to', d.to);
   params.set('breakdown', type);
+  if (selectedCampaignId) params.set('campaign_ids', selectedCampaignId);
 
   document.getElementById('breakdownLoading').classList.remove('hidden');
   document.getElementById('breakdownBody').innerHTML = '';
@@ -329,7 +1107,7 @@ function loadBreakdown(type) {
   api('/api/ads/insights?' + params.toString())
     .then(json => renderBreakdown(json.data, type))
     .catch(err => {
-      document.getElementById('breakdownBody').innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-400">${err.message}</td></tr>`;
+      document.getElementById('breakdownBody').innerHTML = `<tr><td colspan="10" class="text-center py-4 text-red-400">${err.message}</td></tr>`;
     })
     .finally(() => document.getElementById('breakdownLoading').classList.add('hidden'));
 }
@@ -346,28 +1124,40 @@ function renderBreakdown(data, type) {
     <tr>
       <th class="text-left py-2 px-3 font-medium">${type.charAt(0).toUpperCase() + type.slice(1)}</th>
       <th class="text-right py-2 px-3 font-medium">Spend</th>
-      <th class="text-right py-2 px-3 font-medium">Impressions</th>
+      <th class="text-right py-2 px-3 font-medium">Impr.</th>
       <th class="text-right py-2 px-3 font-medium">Clicks</th>
       <th class="text-right py-2 px-3 font-medium">CTR</th>
       <th class="text-right py-2 px-3 font-medium">CPC</th>
+      <th class="text-right py-2 px-3 font-medium">Regs.</th>
+      <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
       <th class="text-right py-2 px-3 font-medium">Leads</th>
+      <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
     </tr>
   `;
 
-  document.getElementById('breakdownBody').innerHTML = data.map(row => `
-    <tr class="hover:bg-slate-800/50">
-      <td class="py-2 px-3 text-white font-medium">${row[segKey] || '—'}</td>
-      <td class="py-2 px-3 text-right">${fmt(row.spend)}</td>
-      <td class="py-2 px-3 text-right">${fmtNum(row.impressions)}</td>
-      <td class="py-2 px-3 text-right">${fmtNum(row.clicks)}</td>
-      <td class="py-2 px-3 text-right">${fmtPct(row.ctr)}</td>
-      <td class="py-2 px-3 text-right">${fmt(row.cpc)}</td>
-      <td class="py-2 px-3 text-right">${fmtNum(getLeads(row))}</td>
-    </tr>
-  `).join('');
+  document.getElementById('breakdownBody').innerHTML = data.map(row => {
+    const regs = getRegistrations(row.actions);
+    const costReg = getCostPerReg(row.cost_per_action);
+    const leads = getLeads(row.actions);
+    const costLead = getCostPerLead(row.cost_per_action);
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="py-2 px-3 text-white font-medium">${row[segKey] || '—'}</td>
+        <td class="py-2 px-3 text-right">${fmt(row.spend)}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(row.impressions)}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(row.clicks)}</td>
+        <td class="py-2 px-3 text-right">${fmtPct(row.ctr)}</td>
+        <td class="py-2 px-3 text-right">${fmt(row.cpc)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${regs > 0 ? 'text-emerald-400' : 'text-slate-500'}">${regs > 0 ? fmtNum(regs) : '—'}</td>
+        <td class="py-2 px-3 text-right ${costReg > 0 ? 'text-rose-400' : 'text-slate-500'}">${costReg > 0 ? fmt(costReg) : '—'}</td>
+        <td class="py-2 px-3 text-right font-semibold ${leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${leads > 0 ? fmtNum(leads) : '—'}</td>
+        <td class="py-2 px-3 text-right ${costLead > 0 ? 'text-pink-400' : 'text-slate-500'}">${costLead > 0 ? fmt(costLead) : '—'}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
-// ─── Campaigns Table ────────────────────────────────────────────────────────
+// ─── Campaigns Table ─────────────────────────────────────────────────────────
 
 function renderCampaigns(campaigns) {
   const statusBadge = (s) => {
@@ -381,60 +1171,183 @@ function renderCampaigns(campaigns) {
     return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${s}</span>`;
   };
 
+  document.getElementById('campaignsCount').textContent = campaigns.length + ' of ' + allCampaigns.length + ' campaigns';
+
   document.getElementById('campaignsBody').innerHTML = campaigns.map(c => {
     const ins = c.insights?.data?.[0] || {};
-    const actions = {};
-    (ins.actions || []).forEach(a => { actions[a.action_type] = Number(a.value); });
-    const costPer = {};
-    (ins.cost_per_action_type || []).forEach(a => { costPer[a.action_type] = Number(a.value); });
-    const leads = actions.lead || actions.onsite_web_lead || 0;
+    const actions = flattenActionsRaw(ins.actions);
+    const costPer = flattenCostRaw(ins.cost_per_action_type);
+    const regs = getRegistrations(actions);
+    const costReg = getCostPerReg(costPer);
+    const leads = getLeads(actions);
+    const costLead = getCostPerLead(costPer);
 
     return `
       <tr class="hover:bg-slate-800/50">
-        <td class="py-2 px-3 text-white font-medium max-w-xs truncate">${c.name}</td>
+        <td class="py-2 px-3 text-white font-medium max-w-xs truncate" title="${c.name}">${c.name}</td>
         <td class="py-2 px-3">${statusBadge(c.status)}</td>
         <td class="py-2 px-3 text-right">${fmt(Number(ins.spend || 0))}</td>
         <td class="py-2 px-3 text-right">${fmtNum(Number(ins.impressions || 0))}</td>
         <td class="py-2 px-3 text-right">${fmtNum(Number(ins.clicks || 0))}</td>
         <td class="py-2 px-3 text-right">${fmtPct(Number(ins.ctr || 0))}</td>
-        <td class="py-2 px-3 text-right">${fmt(Number(ins.cpc || 0))}</td>
-        <td class="py-2 px-3 text-right">${fmtNum(leads)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${regs > 0 ? 'text-emerald-400' : 'text-slate-500'}">${regs > 0 ? fmtNum(regs) : '—'}</td>
+        <td class="py-2 px-3 text-right ${costReg > 0 ? 'text-rose-400' : 'text-slate-500'}">${costReg > 0 ? fmt(costReg) : '—'}</td>
+        <td class="py-2 px-3 text-right font-semibold ${leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${leads > 0 ? fmtNum(leads) : '—'}</td>
+        <td class="py-2 px-3 text-right ${costLead > 0 ? 'text-pink-400' : 'text-slate-500'}">${costLead > 0 ? fmt(costLead) : '—'}</td>
       </tr>
     `;
   }).join('');
 }
 
-// ─── Load All ───────────────────────────────────────────────────────────────
+// ─── Adsets Table ────────────────────────────────────────────────────────────
+
+function renderAdsets(adsets) {
+  const statusBadge = (s) => {
+    const colors = {
+      ACTIVE: 'bg-green-500/20 text-green-400',
+      PAUSED: 'bg-amber-500/20 text-amber-400',
+      DELETED: 'bg-red-500/20 text-red-400',
+      ARCHIVED: 'bg-slate-500/20 text-slate-400',
+    };
+    const cls = colors[s] || 'bg-slate-500/20 text-slate-400';
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${s}</span>`;
+  };
+
+  document.getElementById('adsetsCount').textContent = adsets.length + ' of ' + allAdsets.length + ' ad sets';
+
+  document.getElementById('adsetsBody').innerHTML = adsets.map(a => {
+    const ins = a.insights?.data?.[0] || {};
+    const actions = flattenActionsRaw(ins.actions);
+    const costPer = flattenCostRaw(ins.cost_per_action_type);
+    const regs = getRegistrations(actions);
+    const costReg = getCostPerReg(costPer);
+    const leads = getLeads(actions);
+    const costLead = getCostPerLead(costPer);
+
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="py-2 px-3 text-white font-medium max-w-xs truncate" title="${a.name}">${a.name}</td>
+        <td class="py-2 px-3 text-xs text-slate-400 max-w-[150px] truncate" title="${a.campaign?.name || ''}">${a.campaign?.name || '—'}</td>
+        <td class="py-2 px-3">${statusBadge(a.status)}</td>
+        <td class="py-2 px-3 text-right">${fmt(Number(ins.spend || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(Number(ins.impressions || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(Number(ins.clicks || 0))}</td>
+        <td class="py-2 px-3 text-right">${fmtPct(Number(ins.ctr || 0))}</td>
+        <td class="py-2 px-3 text-right font-semibold ${regs > 0 ? 'text-emerald-400' : 'text-slate-500'}">${regs > 0 ? fmtNum(regs) : '—'}</td>
+        <td class="py-2 px-3 text-right ${costReg > 0 ? 'text-rose-400' : 'text-slate-500'}">${costReg > 0 ? fmt(costReg) : '—'}</td>
+        <td class="py-2 px-3 text-right font-semibold ${leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${leads > 0 ? fmtNum(leads) : '—'}</td>
+        <td class="py-2 px-3 text-right ${costLead > 0 ? 'text-pink-400' : 'text-slate-500'}">${costLead > 0 ? fmt(costLead) : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ─── Load All ────────────────────────────────────────────────────────────────
 
 async function loadAll() {
   const d = getDates();
   const q = qs(d);
+  const qc = qs(d, true); // with campaign filter for insights
 
   // Show loading states
   document.getElementById('kpiGrid').innerHTML = '<div class="col-span-full flex justify-center py-8"><div class="spinner"></div></div>';
   document.getElementById('chartLoading').classList.remove('hidden');
+  document.getElementById('creativesLoading').classList.remove('hidden');
+  document.getElementById('creativesBody').innerHTML = '';
   document.getElementById('campaignsLoading').classList.remove('hidden');
+  document.getElementById('adsetsLoading').classList.remove('hidden');
+  document.getElementById('hourlyLoading').classList.remove('hidden');
+  document.getElementById('namingLoading').classList.remove('hidden');
 
   try {
-    const [accountRes, insightsRes, dailyRes, campaignsRes] = await Promise.all([
-      api('/api/ads/account'),
-      api('/api/ads/insights' + q),
-      api('/api/ads/insights/daily' + q),
+    const [insightsRes, dailyRes, campaignsRes, adsetsRes, creativesRes, hourlyRes] = await Promise.all([
+      api('/api/ads/insights' + qc),
+      api('/api/ads/insights/daily' + qc),
       api('/api/ads/campaigns' + q),
+      api('/api/ads/adsets' + q),
+      api('/api/ads/creatives' + q),
+      api('/api/ads/insights/hourly' + qc).catch(() => ({ data: [] })),
     ]);
 
-    // Account name
-    document.getElementById('accountName').textContent = accountRes.data.name + ' (' + accountRes.data.currency + ')';
+    // Store raw data
+    allCampaigns = campaignsRes.data;
+    allAdsets = adsetsRes.data;
+    allAds = creativesRes.data;
+
+    // Populate campaign dropdown (preserve selection)
+    populateCampaignDropdown(allCampaigns);
+    document.getElementById('campaignSelect').value = selectedCampaignId;
+
+    // Client-side filter ads/adsets by selected campaign
+    let filteredAdsRaw = allAds;
+    let filteredAdsets = allAdsets;
+    let filteredCampaigns = allCampaigns;
+    if (selectedCampaignId) {
+      const selName = allCampaigns.find(c => c.id === selectedCampaignId)?.name;
+      filteredAdsRaw = allAds.filter(ad => ad.campaign?.id === selectedCampaignId || ad.campaign?.name === selName);
+      filteredAdsets = allAdsets.filter(a => a.campaign?.id === selectedCampaignId || a.campaign?.name === selName);
+      filteredCampaigns = allCampaigns.filter(c => c.id === selectedCampaignId);
+    }
+
+    // Detect registration event from ads first (before KPI rendering)
+    scanForRegistrationEvent(filteredAdsRaw);
+    // Also try from account-level insights
+    if (!detectedRegKey && insightsRes.data.length > 0) {
+      const row = insightsRes.data[0];
+      detectRegistrationKey(row.actions || {});
+      if (detectedRegKey) {
+        document.getElementById('detectedEvent').classList.remove('hidden');
+        document.getElementById('detectedEventName').textContent = detectedRegKey;
+      }
+    }
+
+    // Detect lead event from ads
+    scanForLeadEvent(filteredAdsRaw);
+    // Also try from account-level insights
+    if (!detectedLeadKey && insightsRes.data.length > 0) {
+      const row = insightsRes.data[0];
+      detectLeadKey(row.actions || {});
+      if (detectedLeadKey) {
+        document.getElementById('detectedEvent').classList.remove('hidden');
+        document.getElementById('detectedLeadBadge').classList.remove('hidden');
+        document.getElementById('detectedLeadName').textContent = detectedLeadKey;
+      }
+    }
 
     // KPI
     renderKPI(insightsRes.data);
 
+    // Parse ads (use campaign-filtered ads)
+    parsedAds = parseAds(filteredAdsRaw);
+
+    // Swap in filtered lists for client-side rendering
+    const savedCampaigns = allCampaigns;
+    const savedAdsets = allAdsets;
+    allCampaigns = filteredCampaigns;
+    allAdsets = filteredAdsets;
+
+    // Creatives
+    document.getElementById('creativesLoading').classList.add('hidden');
+    applyFilters(); // This renders creatives, campaigns, adsets with current keyword filters
+
+    // Restore full lists
+    allCampaigns = savedCampaigns;
+    allAdsets = savedAdsets;
+
     // Chart
     renderDailyChart(dailyRes.data);
 
-    // Campaigns
+    // Hourly
+    document.getElementById('hourlyLoading').classList.add('hidden');
+    renderHourly(hourlyRes.data);
+
+    // Naming convention
+    document.getElementById('namingLoading').classList.add('hidden');
+    analyzeNamingConvention(parsedAds);
+
+    // Campaigns & Adsets loading done
     document.getElementById('campaignsLoading').classList.add('hidden');
-    renderCampaigns(campaignsRes.data);
+    document.getElementById('adsetsLoading').classList.add('hidden');
 
     // Load default breakdown
     loadBreakdown(currentTab);
@@ -442,11 +1355,15 @@ async function loadAll() {
   } catch (err) {
     document.getElementById('kpiGrid').innerHTML = `<div class="col-span-full text-center py-8 text-red-400">${err.message}</div>`;
     document.getElementById('chartLoading').innerHTML = `<p class="text-red-400">${err.message}</p>`;
+    document.getElementById('creativesLoading').classList.add('hidden');
     document.getElementById('campaignsLoading').classList.add('hidden');
+    document.getElementById('adsetsLoading').classList.add('hidden');
+    document.getElementById('hourlyLoading').classList.add('hidden');
+    document.getElementById('namingLoading').classList.add('hidden');
   }
 }
 
-// ─── Init ───────────────────────────────────────────────────────────────────
+// ─── Init ────────────────────────────────────────────────────────────────────
 
 setDefaultDates();
 loadAll();

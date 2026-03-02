@@ -2,15 +2,26 @@ const axios = require("axios");
 
 const BASE_URL = "https://graph.facebook.com/v21.0";
 
-function getClient() {
-  const token = process.env.META_ACCESS_TOKEN;
-  const accountId = process.env.META_AD_ACCOUNT_ID;
-
-  if (!token || !accountId) {
-    throw new Error("META_ACCESS_TOKEN and META_AD_ACCOUNT_ID must be set in .env");
+function getAccountIds() {
+  const multi = process.env.META_AD_ACCOUNT_IDS;
+  if (multi) {
+    return multi.split(",").map((id) => id.trim()).filter(Boolean);
   }
+  const single = process.env.META_AD_ACCOUNT_ID;
+  if (single) return [single.trim()];
+  return [];
+}
 
-  return { token, accountId };
+function getClient(accountId) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) {
+    throw new Error("META_ACCESS_TOKEN must be set in .env");
+  }
+  const resolvedId = accountId || getAccountIds()[0];
+  if (!resolvedId) {
+    throw new Error("No ad account ID configured. Set META_AD_ACCOUNT_IDS or META_AD_ACCOUNT_ID in .env");
+  }
+  return { token, accountId: resolvedId };
 }
 
 function buildUrl(path, params = {}) {
@@ -44,19 +55,34 @@ async function metaGet(path, params = {}) {
 
 function defaultDateRange() {
   const to = new Date().toISOString().split("T")[0];
-  const from = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+  const from = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
   return { from, to };
 }
 
-async function getAccountInfo() {
-  const { accountId } = getClient();
-  return metaGet(accountId, {
-    fields: "name,currency,account_status,amount_spent,balance",
+async function getAccountInfo(accountId) {
+  const { accountId: id } = getClient(accountId);
+  return metaGet(id, {
+    fields: "name,currency,account_status,amount_spent,balance,timezone_name",
   });
 }
 
-async function getCampaigns(dateFrom, dateTo) {
-  const { accountId } = getClient();
+async function getAllAccounts() {
+  const ids = getAccountIds();
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const info = await getAccountInfo(id);
+        return { id: info.id, name: info.name, currency: info.currency, timezone: info.timezone_name };
+      } catch {
+        return { id, name: id, currency: "?", timezone: "?" };
+      }
+    })
+  );
+  return results;
+}
+
+async function getCampaigns(accountId, dateFrom, dateTo) {
+  const { accountId: id } = getClient(accountId);
   const dates = dateFrom && dateTo
     ? { from: dateFrom, to: dateTo }
     : defaultDateRange();
@@ -66,19 +92,41 @@ async function getCampaigns(dateFrom, dateTo) {
     until: dates.to,
   });
 
-  return metaGet(`${accountId}/campaigns`, {
+  return metaGet(`${id}/campaigns`, {
     fields: [
       "name",
       "status",
       "objective",
       `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,actions,cost_per_action_type,purchase_roas}`,
     ].join(","),
-    limit: 100,
+    limit: 200,
   });
 }
 
-async function getInsights(dateFrom, dateTo, breakdown) {
-  const { accountId } = getClient();
+async function getAdsets(accountId, dateFrom, dateTo) {
+  const { accountId: id } = getClient(accountId);
+  const dates = dateFrom && dateTo
+    ? { from: dateFrom, to: dateTo }
+    : defaultDateRange();
+
+  const timeRange = JSON.stringify({
+    since: dates.from,
+    until: dates.to,
+  });
+
+  return metaGet(`${id}/adsets`, {
+    fields: [
+      "name",
+      "status",
+      "campaign{name}",
+      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,actions,cost_per_action_type}`,
+    ].join(","),
+    limit: 200,
+  });
+}
+
+async function getInsights(accountId, dateFrom, dateTo, breakdown, campaignIds) {
+  const { accountId: id } = getClient(accountId);
   const dates = dateFrom && dateTo
     ? { from: dateFrom, to: dateTo }
     : defaultDateRange();
@@ -96,21 +144,76 @@ async function getInsights(dateFrom, dateTo, breakdown) {
     }
   }
 
-  return metaGet(`${accountId}/insights`, params);
+  if (campaignIds && campaignIds.length > 0) {
+    params.filtering = JSON.stringify([{ field: "campaign.id", operator: "IN", value: campaignIds }]);
+  }
+
+  return metaGet(`${id}/insights`, params);
 }
 
-async function getDailyInsights(dateFrom, dateTo) {
-  const { accountId } = getClient();
+async function getDailyInsights(accountId, dateFrom, dateTo, campaignIds) {
+  const { accountId: id } = getClient(accountId);
   const dates = dateFrom && dateTo
     ? { from: dateFrom, to: dateTo }
     : defaultDateRange();
 
-  return metaGet(`${accountId}/insights`, {
+  const params = {
     fields: "spend,impressions,clicks,ctr,cpc,cpm,actions,cost_per_action_type,purchase_roas",
     time_range: JSON.stringify({ since: dates.from, until: dates.to }),
     time_increment: 1,
     limit: 90,
+  };
+
+  if (campaignIds && campaignIds.length > 0) {
+    params.filtering = JSON.stringify([{ field: "campaign.id", operator: "IN", value: campaignIds }]);
+  }
+
+  return metaGet(`${id}/insights`, params);
+}
+
+async function getHourlyInsights(accountId, dateFrom, dateTo, campaignIds) {
+  const { accountId: id } = getClient(accountId);
+  const dates = dateFrom && dateTo
+    ? { from: dateFrom, to: dateTo }
+    : defaultDateRange();
+
+  const params = {
+    fields: "spend,impressions,clicks,actions,cost_per_action_type",
+    time_range: JSON.stringify({ since: dates.from, until: dates.to }),
+    breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+    limit: 500,
+  };
+
+  if (campaignIds && campaignIds.length > 0) {
+    params.filtering = JSON.stringify([{ field: "campaign.id", operator: "IN", value: campaignIds }]);
+  }
+
+  return metaGet(`${id}/insights`, params);
+}
+
+async function getAds(accountId, dateFrom, dateTo) {
+  const { accountId: id } = getClient(accountId);
+  const dates = dateFrom && dateTo
+    ? { from: dateFrom, to: dateTo }
+    : defaultDateRange();
+
+  const timeRange = JSON.stringify({
+    since: dates.from,
+    until: dates.to,
+  });
+
+  return metaGet(`${id}/ads`, {
+    fields: [
+      "id",
+      "name",
+      "status",
+      "campaign{name}",
+      "adset{name}",
+      "adcreatives{thumbnail_url,body,title,call_to_action_type,image_url}",
+      `insights.time_range(${timeRange}){spend,impressions,clicks,ctr,cpc,cpm,actions,cost_per_action_type,purchase_roas}`,
+    ].join(","),
+    limit: 200,
   });
 }
 
-module.exports = { getAccountInfo, getCampaigns, getInsights, getDailyInsights };
+module.exports = { getAccountIds, getAccountInfo, getAllAccounts, getCampaigns, getAdsets, getInsights, getDailyInsights, getHourlyInsights, getAds };
