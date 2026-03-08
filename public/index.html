@@ -1179,7 +1179,7 @@ function loadBreakdown(type) {
   api('/api/ads/insights?' + params.toString())
     .then(json => renderBreakdown(json.data, type))
     .catch(err => {
-      document.getElementById('breakdownBody').innerHTML = `<tr><td colspan="10" class="text-center py-4 text-red-400">${err.message}</td></tr>`;
+      document.getElementById('breakdownBody').innerHTML = `<tr><td colspan="11" class="text-center py-4 text-red-400">${err.message}</td></tr>`;
     })
     .finally(() => document.getElementById('breakdownLoading').classList.add('hidden'));
 }
@@ -1197,6 +1197,7 @@ function renderBreakdown(data, type) {
       <th class="text-left py-2 px-3 font-medium">${type.charAt(0).toUpperCase() + type.slice(1)}</th>
       <th class="text-right py-2 px-3 font-medium">Spend</th>
       <th class="text-right py-2 px-3 font-medium">Impr.</th>
+      <th class="text-right py-2 px-3 font-medium">CPM</th>
       <th class="text-right py-2 px-3 font-medium">Clicks</th>
       <th class="text-right py-2 px-3 font-medium">CTR</th>
       <th class="text-right py-2 px-3 font-medium">CPC</th>
@@ -1217,6 +1218,7 @@ function renderBreakdown(data, type) {
         <td class="py-2 px-3 text-white font-medium">${row[segKey] || '—'}</td>
         <td class="py-2 px-3 text-right">${fmt(row.spend)}</td>
         <td class="py-2 px-3 text-right">${fmtNum(row.impressions)}</td>
+        <td class="py-2 px-3 text-right text-amber-400 font-semibold">${fmt(row.cpm)}</td>
         <td class="py-2 px-3 text-right">${fmtNum(row.clicks)}</td>
         <td class="py-2 px-3 text-right">${fmtPct(row.ctr)}</td>
         <td class="py-2 px-3 text-right">${fmt(row.cpc)}</td>
