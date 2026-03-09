@@ -75,6 +75,45 @@
       </span>
     </div>
 
+    <!-- Placement Breakdown -->
+    <section id="placementSection" class="hidden space-y-4">
+      <h2 class="text-lg font-semibold text-white">Performance by Placement</h2>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5">
+          <div style="height: 280px; position: relative;">
+            <canvas id="placementChart"></canvas>
+          </div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5">
+          <div style="height: 280px; position: relative;">
+            <canvas id="placementCostChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="text-left py-2 px-3 font-medium">Placement</th>
+                <th class="text-right py-2 px-3 font-medium">Spend</th>
+                <th class="text-right py-2 px-3 font-medium">Impressions</th>
+                <th class="text-right py-2 px-3 font-medium">Clicks</th>
+                <th class="text-right py-2 px-3 font-medium">CTR</th>
+                <th class="text-right py-2 px-3 font-medium">CPC</th>
+                <th class="text-right py-2 px-3 font-medium">CPM</th>
+                <th class="text-right py-2 px-3 font-medium">Regs</th>
+                <th class="text-right py-2 px-3 font-medium">Cost/Reg</th>
+                <th class="text-right py-2 px-3 font-medium">Leads</th>
+                <th class="text-right py-2 px-3 font-medium">Cost/Lead</th>
+              </tr>
+            </thead>
+            <tbody id="placementBody" class="divide-y divide-slate-800/50"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- Dimension Breakdowns -->
     <section id="dimensionsSection" class="hidden space-y-6">
       <h2 class="text-lg font-semibold text-white">Dimension Breakdowns <span class="text-sm font-normal text-slate-400">(sorted by Cost/Reg, best first)</span></h2>
@@ -164,6 +203,8 @@ let detectedLeadKey = null;
 
 let selectedCampaignId = '';
 let dimensionCharts = {}; // track Chart.js instances for cleanup
+let placementChart = null;
+let placementCostChart = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -766,6 +807,169 @@ function renderComboTable(tbodyId, combos, sectionId) {
   }).join('');
 }
 
+// ─── Placement Breakdown ─────────────────────────────────────────────────────
+
+const PLACEMENT_COLORS = {
+  'facebook': '#1877F2',
+  'instagram': '#E4405F',
+  'audience_network': '#F7931A',
+  'messenger': '#0084FF',
+  'unknown': '#64748b',
+};
+
+function getPlacementColor(platform) {
+  const key = (platform || '').toLowerCase().replace(/\s+/g, '_');
+  for (const [k, v] of Object.entries(PLACEMENT_COLORS)) {
+    if (key.includes(k)) return v;
+  }
+  return PLACEMENT_COLORS.unknown;
+}
+
+function renderPlacements(rows) {
+  if (!rows || rows.length === 0) {
+    document.getElementById('placementSection').classList.add('hidden');
+    return;
+  }
+
+  // Detect reg/lead keys from placement data actions
+  for (const row of rows) {
+    if (row.actions) {
+      detectRegistrationKey(row.actions);
+      detectLeadKey(row.actions);
+    }
+    if (detectedRegKey && detectedLeadKey) break;
+  }
+
+  // Aggregate by platform
+  const map = {};
+  for (const row of rows) {
+    const p = row.platform || 'Unknown';
+    if (!map[p]) map[p] = { name: p, spend: 0, impressions: 0, clicks: 0, registrations: 0, leads: 0 };
+    const g = map[p];
+    g.spend += row.spend || 0;
+    g.impressions += row.impressions || 0;
+    g.clicks += row.clicks || 0;
+    g.registrations += row.actions ? getRegistrations(row.actions) : 0;
+    g.leads += row.actions ? getLeads(row.actions) : 0;
+  }
+
+  const placements = Object.values(map)
+    .map(g => ({
+      ...g,
+      ctr: g.impressions > 0 ? (g.clicks / g.impressions) * 100 : 0,
+      cpc: g.clicks > 0 ? g.spend / g.clicks : 0,
+      cpm: g.impressions > 0 ? (g.spend / g.impressions) * 1000 : 0,
+      costPerReg: g.registrations > 0 ? g.spend / g.registrations : Infinity,
+      costPerLead: g.leads > 0 ? g.spend / g.leads : Infinity,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+
+  // Table
+  const totalSpend = placements.reduce((s, p) => s + p.spend, 0);
+  document.getElementById('placementBody').innerHTML = placements.map(p => {
+    const pct = totalSpend > 0 ? ((p.spend / totalSpend) * 100).toFixed(1) : '0.0';
+    const bestCostReg = Math.min(...placements.filter(x => x.costPerReg < Infinity).map(x => x.costPerReg));
+    const isBestReg = p.costPerReg === bestCostReg && p.costPerReg < Infinity;
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="py-2 px-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${getPlacementColor(p.name)}"></span>
+            <span class="text-white font-medium">${p.name}</span>
+            <span class="text-slate-500 text-xs">${pct}%</span>
+          </div>
+        </td>
+        <td class="py-2 px-3 text-right">${fmt(p.spend)}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(p.impressions)}</td>
+        <td class="py-2 px-3 text-right">${fmtNum(p.clicks)}</td>
+        <td class="py-2 px-3 text-right">${fmtPct(p.ctr)}</td>
+        <td class="py-2 px-3 text-right">${fmt(p.cpc)}</td>
+        <td class="py-2 px-3 text-right">${fmt(p.cpm)}</td>
+        <td class="py-2 px-3 text-right font-semibold ${p.registrations > 0 ? 'text-emerald-400' : 'text-slate-500'}">${p.registrations > 0 ? fmtNum(p.registrations) : '\u2014'}</td>
+        <td class="py-2 px-3 text-right ${isBestReg ? 'text-emerald-400 font-semibold' : p.costPerReg < Infinity ? 'text-rose-400' : 'text-slate-500'}">${p.costPerReg < Infinity ? fmt(p.costPerReg) : '\u2014'}${isBestReg ? ' \u2b50' : ''}</td>
+        <td class="py-2 px-3 text-right font-semibold ${p.leads > 0 ? 'text-sky-400' : 'text-slate-500'}">${p.leads > 0 ? fmtNum(p.leads) : '\u2014'}</td>
+        <td class="py-2 px-3 text-right ${p.costPerLead < Infinity ? 'text-pink-400' : 'text-slate-500'}">${p.costPerLead < Infinity ? fmt(p.costPerLead) : '\u2014'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Spend donut chart
+  if (placementChart) placementChart.destroy();
+  const ctx1 = document.getElementById('placementChart').getContext('2d');
+  placementChart = new Chart(ctx1, {
+    type: 'doughnut',
+    data: {
+      labels: placements.map(p => p.name),
+      datasets: [{
+        data: placements.map(p => p.spend),
+        backgroundColor: placements.map(p => getPlacementColor(p.name)),
+        borderColor: '#0f172a',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 12 }, padding: 16, usePointStyle: true, pointStyleWidth: 10 } },
+        title: { display: true, text: 'Spend by Placement', color: '#f1f5f9', font: { size: 14, weight: '600' }, padding: { bottom: 12 } },
+        tooltip: {
+          backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
+          callbacks: {
+            label: ctx => {
+              const val = ctx.parsed;
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+              return ` ${ctx.label}: ${fmt(val)} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Cost/Reg bar chart
+  const withRegs = placements.filter(p => p.costPerReg < Infinity);
+  if (placementCostChart) placementCostChart.destroy();
+  if (withRegs.length > 0) {
+    const sorted = [...withRegs].sort((a, b) => a.costPerReg - b.costPerReg);
+    const ctx2 = document.getElementById('placementCostChart').getContext('2d');
+    placementCostChart = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(p => p.name),
+        datasets: [{
+          label: 'Cost/Reg',
+          data: sorted.map(p => p.costPerReg),
+          backgroundColor: sorted.map(p => getPlacementColor(p.name)),
+          borderRadius: 6,
+          barThickness: 28,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'Cost per Registration by Placement', color: '#f1f5f9', font: { size: 14, weight: '600' }, padding: { bottom: 12 } },
+          tooltip: {
+            backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
+            callbacks: { label: ctx => ' Cost/Reg: ' + fmt(ctx.parsed.x) }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 11 }, callback: v => '$' + v.toFixed(0) }, grid: { color: 'rgba(51, 65, 85, 0.3)' } },
+          y: { ticks: { color: '#e2e8f0', font: { size: 12 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  document.getElementById('placementSection').classList.remove('hidden');
+}
+
 // ─── Campaign Dropdown ───────────────────────────────────────────────────────
 
 function populateCampaignDropdown(campaigns) {
@@ -803,15 +1007,18 @@ async function loadData() {
   // Show loading
   document.getElementById('globalLoading').classList.remove('hidden');
   document.getElementById('kpiSection').classList.add('hidden');
+  document.getElementById('placementSection').classList.add('hidden');
   document.getElementById('dimensionsSection').classList.add('hidden');
   document.getElementById('winnersSection').classList.add('hidden');
   document.getElementById('losersSection').classList.add('hidden');
   document.getElementById('errorMsg').classList.add('hidden');
 
   try {
-    const [campaignsRes, creativesRes] = await Promise.all([
+    const placementQ = q + '&breakdown=placement' + (selectedCampaignId ? '&campaign_ids=' + selectedCampaignId : '');
+    const [campaignsRes, creativesRes, placementRes] = await Promise.all([
       api('/api/ads/campaigns' + q),
       api('/api/ads/creatives' + q),
+      api('/api/ads/insights' + placementQ),
     ]);
 
     // Populate campaign dropdown
@@ -832,6 +1039,7 @@ async function loadData() {
 
     // Render
     renderKPIs(ads);
+    renderPlacements(placementRes.data || []);
     renderDimensions(ads);
     analyzeCombinations(ads);
 
